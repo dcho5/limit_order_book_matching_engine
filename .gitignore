@@ -1,0 +1,17 @@
+# Build output
+build/
+
+# Internal notes
+TODO.md
+
+# Benchmark results (generated at runtime)
+results/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

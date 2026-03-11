@@ -1,0 +1,550 @@
+/* style.css — dark trading terminal theme */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0b0f1a;
+  --bg-panel:  #111827;
+  --bg-header: #0d1530;
+  --border:    #1e2d45;
+  --text:      #c9d4e8;
+  --text-dim:  #5a6a80;
+  --green:     #00d26a;
+  --green-dim: #005c2f;
+  --red:       #ff4757;
+  --red-dim:   #6b1a22;
+  --yellow:    #ffd32a;
+  --font:      'Courier New', 'Consolas', monospace;
+}
+
+body {
+  background: var(--bg);
+  color:      var(--text);
+  font-family: var(--font);
+  font-size:  13px;
+  line-height: 1.4;
+  min-height: 100vh;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--yellow);
+  letter-spacing: 1px;
+}
+
+.sim-badge {
+  font-size: 11px;
+  background: #00d26a22;
+  color: var(--green);
+  border: 1px solid var(--green-dim);
+  padding: 1px 7px;
+  border-radius: 3px;
+  letter-spacing: 2px;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+
+.subtitle {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-top: 3px;
+  display: block;
+}
+
+.live-dot-wrap {
+  font-size: 12px;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 1px;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 210, 106, 0.5); }
+  50%       { opacity: 0.8; box-shadow: 0 0 0 5px rgba(0, 210, 106, 0); }
+}
+
+/* ── Live banner ─────────────────────────────────────────────────────────── */
+
+.live-banner {
+  padding: 8px 20px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: #0d1a10;
+  border-bottom: 1px solid var(--green-dim);
+  line-height: 1.8;
+}
+
+.live-banner strong { color: var(--green); font-weight: bold; }
+.live-banner code   { color: var(--yellow); font-size: 10px; }
+.live-banner-note   { color: var(--yellow); font-weight: bold; letter-spacing: 1px; }
+
+/* ── Stats bar ───────────────────────────────────────────────────────────── */
+
+.stats-bar {
+  display: flex;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 7px 24px;
+  border-right: 1px solid var(--border);
+  min-width: 90px;
+}
+
+.stat-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.stat-val {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text);
+}
+
+/* ── Price chart ─────────────────────────────────────────────────────────── */
+
+.chart-panel {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px 0;
+}
+
+.chart-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.chart-cur-price {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--text);
+}
+
+.chart-change {
+  font-size: 12px;
+}
+
+.ch-up   { color: var(--green); }
+.ch-down { color: var(--red); }
+
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  overflow: hidden;
+}
+
+#price-chart {
+  display: block;
+}
+
+/* ── Controls bar ────────────────────────────────────────────────────────── */
+
+.controls-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  padding: 10px 20px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.order-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Labeled field group */
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-label {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.order-form select,
+.order-form input[type=number] {
+  padding: 5px 8px;
+  font-family: var(--font);
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  outline: none;
+  height: 28px;
+}
+
+.order-form select:focus,
+.order-form input:focus {
+  border-color: var(--yellow);
+}
+
+.order-form input[type=number] { width: 80px; }
+
+.btn-submit { align-self: flex-end; }
+
+.form-error {
+  font-size: 11px;
+  color: var(--red);
+  align-self: flex-end;
+  padding-bottom: 6px;
+}
+
+.sim-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+.btn {
+  padding: 5px 14px;
+  font-family: var(--font);
+  font-size: 12px;
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) { background: #1e2d45; }
+.btn:disabled { opacity: 0.35; cursor: default; }
+.btn-primary  { border-color: var(--green); color: var(--green); }
+.btn-primary:hover:not(:disabled) { background: var(--green-dim); }
+.btn-placed   { border-color: var(--green) !important; color: var(--green) !important; }
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.speed-control input[type=range] { width: 90px; accent-color: var(--yellow); }
+#speed-val { color: var(--text-dim); min-width: 44px; }
+
+/* ── My Orders panel ─────────────────────────────────────────────────────── */
+
+.user-orders-panel {
+  background: #0d1020;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 20px 10px;
+}
+
+.uo-panel-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.user-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.uo-row {
+  display: grid;
+  grid-template-columns: 44px 48px 56px 44px 1fr 56px 80px 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.uo-side-badge {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.uo-buy  { color: var(--green); background: rgba(0,210,106,0.12); border: 1px solid var(--green-dim); }
+.uo-sell { color: var(--red);   background: rgba(255,71,87,0.12);  border: 1px solid var(--red-dim); }
+
+.uo-type        { font-size: 11px; color: var(--text-dim); }
+.uo-price-label { font-size: 12px; color: var(--text);     font-weight: bold; }
+.uo-qty-label   { font-size: 11px; color: var(--text-dim); }
+.uo-fill-count  { font-size: 11px; color: var(--text-dim); text-align: right; }
+
+.uo-bar-wrap {
+  height: 8px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.uo-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Status badges */
+.uo-status {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+.uo-status-open     { color: var(--yellow); }
+.uo-status-partial  { color: #ffa040; }
+.uo-status-filled   { color: var(--green); }
+.uo-status-canceled { color: var(--text-dim); opacity: 0.5; }
+.uo-status-rejected { color: var(--red); }
+
+.btn-cancel-order {
+  padding: 2px 6px;
+  font-family: var(--font);
+  font-size: 11px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid #2a3a50;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: color 0.1s, border-color 0.1s;
+}
+.btn-cancel-order:hover { color: var(--red); border-color: var(--red-dim); }
+
+.uo-no-cancel { display: block; width: 30px; }
+
+/* ── Main grid ───────────────────────────────────────────────────────────── */
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 220px;
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.panel {
+  background: var(--bg-panel);
+  padding: 12px;
+}
+
+.panel-title {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bid-title { color: var(--green); }
+.ask-title { color: var(--red); }
+
+/* ── Order book rows — fixed height so panel never shifts ────────────────── */
+
+.book-header {
+  display: grid;
+  grid-template-columns: 55px 1fr 55px;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+/* Each row is exactly 19px (16px bar + 3px margin-bottom).
+   8 rows = 152px. Fixed so the panel height never changes. */
+.book-rows {
+  height: 152px;
+  overflow: hidden;
+}
+
+.level-row {
+  display: grid;
+  grid-template-columns: 55px 1fr 55px;
+  gap: 4px;
+  align-items: center;
+  height: 16px;
+  margin-bottom: 3px;
+}
+
+.level-empty .lv-vol,
+.level-empty .lv-price {
+  color: var(--text-dim);
+  opacity: 0.25;
+}
+
+.lv-price {
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--text);
+  text-align: center;
+}
+
+.lv-vol { font-size: 12px; text-align: right; }
+.bid-text { color: var(--green); }
+.ask-text { color: var(--red); }
+
+.bar-wrap {
+  height: 16px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.15s ease;
+}
+
+.bid-bar { background: linear-gradient(to right, var(--green-dim), var(--green)); }
+.ask-bar { background: linear-gradient(to right, var(--red-dim),   var(--red)); }
+
+/* Fixed height: font-size 11px + padding ~8px */
+.spread-info {
+  height: 28px;
+  line-height: 28px;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ── Price ladder heatmap ────────────────────────────────────────────────── */
+
+/* 14 rows × 17px (14px bar + 3px gap) = 238px. Fixed. */
+.heatmap-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  height: 238px;
+  overflow: hidden;
+}
+
+.hm-row {
+  display: grid;
+  grid-template-columns: 36px 1fr 44px;
+  align-items: center;
+  gap: 4px;
+  height: 14px;
+}
+
+.hm-row-empty { opacity: 0.2; }
+
+.hm-price {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.hm-bar {
+  height: 14px;
+  border-radius: 2px;
+  min-width: 3px;
+  transition: width 0.15s ease, opacity 0.15s ease;
+}
+
+.hm-vol {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+/* ── Trades ticker ───────────────────────────────────────────────────────── */
+
+.trades-panel {
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  padding: 12px 20px;
+}
+
+/* 10 rows × ~22px = 220px. Fixed so panel height is stable. */
+.trades-scroll {
+  height: 220px;
+  overflow: hidden;
+}
+
+.trades-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.trades-table th {
+  text-align: left;
+  padding: 4px 10px 4px 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--border);
+}
+
+.trades-table td {
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.trade-buy  td { color: var(--green); }
+.trade-sell td { color: var(--red); }
+.trade-empty td { color: var(--text-dim); opacity: 0.2; }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .main-grid { grid-template-columns: 1fr 1fr; }
+  #heatmap-panel { grid-column: 1 / -1; }
+  .sim-controls { margin-left: 0; }
+  .stats-bar { flex-wrap: wrap; }
+}

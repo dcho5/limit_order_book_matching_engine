@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limit Order Book Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <h1>Limit Order Book <span class="sim-badge">LIVE</span></h1>
+      <span class="subtitle">C++ Price-Time Priority Matching Engine · Interactive Simulator</span>
+    </div>
+    <div class="header-right">
+      <span class="live-dot-wrap"><span class="live-dot"></span> LIVE</span>
+    </div>
+  </header>
+
+  <!-- ── Live explanation banner ─────────────────────────────────────────── -->
+  <div class="live-banner">
+    <span class="live-banner-note">NOTE —</span>
+    The simulation is <strong>intentionally throttled</strong> for visual clarity (adjustable via Speed).
+    The real C++ engine runs at <strong>13M ops/sec · p50 42 ns · p99 292 ns</strong> on a single thread —
+    verified by <code>./build/benchmark_runner</code> and <code>./build/order_book_tests</code>.
+    Place your own orders below to interact with the live book.
+  </div>
+
+  <!-- ── Stats row ───────────────────────────────────────────────────────── -->
+  <div class="stats-bar">
+    <div class="stat"><span class="stat-label">ORDERS</span><span id="stat-orders" class="stat-val">0</span></div>
+    <div class="stat"><span class="stat-label">TRADES</span><span id="stat-trades" class="stat-val">0</span></div>
+    <div class="stat"><span class="stat-label">RESTING</span><span id="stat-resting" class="stat-val">0</span></div>
+    <div class="stat"><span class="stat-label">MID</span><span id="stat-mid" class="stat-val">—</span></div>
+  </div>
+
+  <!-- ── Price chart ─────────────────────────────────────────────────────── -->
+  <div class="chart-panel">
+    <div class="chart-header">
+      <span class="panel-title" style="margin:0;border:none;padding:0">MID PRICE</span>
+      <span id="chart-cur-price" class="chart-cur-price">—</span>
+      <span id="chart-change"    class="chart-change"></span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="price-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Order entry + sim controls ─────────────────────────────────────── -->
+  <div class="controls-bar">
+
+    <form id="user-order-form" class="order-form">
+      <div class="field-group">
+        <label class="field-label" for="u-side">Side</label>
+        <select id="u-side">
+          <option value="buy">Buy</option>
+          <option value="sell">Sell</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="u-type">Order Type</label>
+        <select id="u-type">
+          <option value="limit">Limit</option>
+          <option value="market">Market</option>
+        </select>
+      </div>
+      <div class="field-group" id="price-field">
+        <label class="field-label" for="u-price">Limit Price</label>
+        <input id="u-price" type="number" min="1" step="1" value="100">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="u-qty">Quantity</label>
+        <input id="u-qty" type="number" min="1" step="1" value="100">
+      </div>
+      <button id="u-submit" type="submit" class="btn btn-primary btn-submit">Submit Order</button>
+      <span id="form-error" class="form-error" style="display:none"></span>
+    </form>
+
+    <div class="sim-controls">
+      <button id="btn-pause"  class="btn">⏸ Pause</button>
+      <button id="btn-resume" class="btn" disabled>▶ Resume</button>
+      <div class="speed-control">
+        <label for="speed">Speed</label>
+        <input id="speed" type="range" min="50" max="1500" step="50" value="300">
+        <span id="speed-val">300ms</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── My Orders panel ────────────────────────────────────────────────── -->
+  <div id="user-orders-panel" class="user-orders-panel" style="display:none">
+    <span class="uo-panel-label">MY ORDERS</span>
+    <div id="user-orders-list" class="user-orders-list"></div>
+  </div>
+
+  <!-- ── Main grid ───────────────────────────────────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- Bids panel -->
+    <section class="panel" id="bids-panel">
+      <h2 class="panel-title bid-title">▲ BIDS</h2>
+      <div class="book-header">
+        <span>Vol</span><span>Depth</span><span>Price</span>
+      </div>
+      <div id="bids-rows" class="book-rows"></div>
+    </section>
+
+    <!-- Asks panel -->
+    <section class="panel" id="asks-panel">
+      <h2 class="panel-title ask-title">▼ ASKS</h2>
+      <div class="book-header ask-header">
+        <span>Price</span><span>Depth</span><span>Vol</span>
+      </div>
+      <div id="asks-rows" class="book-rows"></div>
+      <div id="spread-info" class="spread-info"></div>
+    </section>
+
+    <!-- Price ladder heatmap -->
+    <section class="panel" id="heatmap-panel">
+      <h2 class="panel-title">PRICE LADDER</h2>
+      <div id="heatmap-rows" class="heatmap-rows"></div>
+    </section>
+
+  </div>
+
+  <!-- ── Trade ticker ────────────────────────────────────────────────────── -->
+  <section class="trades-panel">
+    <h2 class="panel-title">RECENT TRADES</h2>
+    <div class="trades-scroll">
+      <table class="trades-table">
+        <thead>
+          <tr><th>T</th><th>Price</th><th>Qty</th><th>Aggressor</th></tr>
+        </thead>
+        <tbody id="trades-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>

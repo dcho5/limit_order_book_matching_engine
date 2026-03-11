@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /Users/dcho5/Desktop/coding_projects.nosync/limit_order_book_matching_engine_031026/matching_engine && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release 2>&1)",
+      "Bash(which cmake:*)",
+      "Bash(cd /Users/dcho5/Desktop/coding_projects.nosync/limit_order_book_matching_engine_031026/matching_engine && clang++ -std=c++20 -O2 -Wall -Wextra -Isrc src/order_book.cpp src/matching_engine.cpp tests/order_book_tests.cpp -o build_test 2>&1)",
+      "Bash(./build_test)",
+      "Bash(clang++ -std=c++20 -O2 -Wall -Wextra -Isrc src/order_book.cpp src/matching_engine.cpp tests/order_book_tests.cpp -o build_test 2>&1 && ./build_test)",
+      "Bash(clang++ -std=c++20 -O2 -Wall -Wextra -Isrc src/order_book.cpp src/matching_engine.cpp bench/benchmark.cpp -o build_bench 2>&1 && ./build_bench)",
+      "Bash(cmake -S . -B build && cmake --build build 2>&1)",
+      "Bash(/opt/homebrew/bin/cmake --version)",
+      "Bash(/Applications/CMake.app/Contents/bin/cmake --version)",
+      "Read(//usr/**)",
+      "Bash(mdfind -name cmake 2>/dev/null | grep -v \".cmake\" | head -10)",
+      "Bash(/opt/homebrew/bin/brew install:*)",
+      "Bash(/opt/homebrew/bin/cmake -S . -B build && /opt/homebrew/bin/cmake --build build 2>&1)",
+      "Bash(./build/order_book_tests && ./build/benchmark)",
+      "Bash(/opt/homebrew/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release 2>&1 && /opt/homebrew/bin/cmake --build build 2>&1)",
+      "Bash(./build/order_book_tests)",
+      "Bash(./build/benchmark_runner 2>&1)",
+      "Bash(/opt/homebrew/bin/cmake --build build --clean-first 2>&1 | tail -5)",
+      "Bash(/opt/homebrew/bin/cmake --build build 2>&1)",
+      "Bash(/opt/homebrew/bin/cmake --build build --clean-first 2>&1 | grep -E \"Built|error|warning\" && echo \"---\" && ./build/order_book_tests && echo \"---\" && ./build/export_events && echo \"---\" && python3 -c \"import json; events=json.load\\(open\\('web/data/events.json'\\)\\); types={}; [types.__setitem__\\(e['type'], types.get\\(e['type'],0\\)+1\\) for e in events]; print\\('Event breakdown:', types\\); print\\('JSON valid: OK'\\)\")",
+      "Bash(cmake -S . -B build -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -5 && cmake --build build 2>&1 | tail -20)",
+      "Bash(/opt/homebrew/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -5 && /opt/homebrew/bin/cmake --build build 2>&1 | tail -20)",
+      "Bash(/opt/homebrew/bin/cmake --build build --clean-first 2>&1 | tail -15 && ./build/order_book_tests)"
+    ]
+  }
+}
