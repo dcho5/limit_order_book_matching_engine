@@ -17,5 +17,7 @@ struct Order {
     Side     side     = Side::Buy;
 };
 
-static_assert(sizeof(Order) == 48,
+// Native 64-bit: 2×8 + 3×8 + 1 + 7pad = 48 bytes (¾ cache line)
+// WASM 32-bit:   2×4 + 3×8 + 1 + 7pad = 40 bytes
+static_assert(sizeof(Order) == 48 || sizeof(Order) == 40,
     "Order layout changed — verify cache-line impact before proceeding");

@@ -1,0 +1,104 @@
+name: Release — Build Native Servers
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-mac-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build engine_server (macOS arm64)
+        run: |
+          cmake -S matching_engine -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target engine_server --config Release
+          mv build/engine_server engine_server-mac-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine_server-mac-arm64
+          path: engine_server-mac-arm64
+
+  build-mac-x86:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build engine_server (macOS x86_64)
+        run: |
+          cmake -S matching_engine -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target engine_server --config Release
+          mv build/engine_server engine_server-mac-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine_server-mac-x86_64
+          path: engine_server-mac-x86_64
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build engine_server (Linux x86_64)
+        run: |
+          cmake -S matching_engine -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target engine_server --config Release
+          mv build/engine_server engine_server-linux-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine_server-linux-x86_64
+          path: engine_server-linux-x86_64
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build engine_server (Windows x64)
+        run: |
+          cmake -S matching_engine -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target engine_server --config Release
+          mv build/Release/engine_server.exe engine_server-windows-x64.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine_server-windows-x64
+          path: engine_server-windows-x64.exe
+
+  release:
+    needs: [build-mac-arm64, build-mac-x86, build-linux, build-windows]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/engine_server-mac-arm64
+            artifacts/engine_server-mac-x86_64
+            artifacts/engine_server-linux-x86_64
+            artifacts/engine_server-windows-x64.exe
+          generate_release_notes: true
+          body: |
+            ## Native Server Binaries
+
+            Download the binary for your platform, make it executable, and run it:
+
+            ```bash
+            # macOS (Apple Silicon)
+            chmod +x engine_server-mac-arm64 && ./engine_server-mac-arm64
+
+            # macOS (Intel)
+            chmod +x engine_server-mac-x86_64 && ./engine_server-mac-x86_64
+
+            # Linux
+            chmod +x engine_server-linux-x86_64 && ./engine_server-linux-x86_64
+
+            # Windows
+            engine_server-windows-x64.exe
+            ```
+
+            Then open the demo page — the mode badge will switch from `● WASM` to `● NATIVE C++`
+            and timing will show true nanosecond resolution (~13M ops/sec, p50 ~42 ns).

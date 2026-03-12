@@ -52,3 +52,16 @@ target_link_libraries(benchmark_runner PRIVATE engine_lib baseline_lib)
 # Event exporter: generates web/data/events.json for the browser visualizer
 add_executable(export_events bench/export_events.cpp)
 target_link_libraries(export_events PRIVATE engine_lib)
+
+# ── Native HTTP server ────────────────────────────────────────────────────────
+
+include(FetchContent)
+FetchContent_Declare(httplib
+  URL https://github.com/yhirose/cpp-httplib/archive/refs/tags/v0.18.1.tar.gz
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(httplib)
+
+add_executable(engine_server src/server.cpp)
+target_link_libraries(engine_server PRIVATE engine_lib httplib::httplib)
+target_include_directories(engine_server PRIVATE src)

@@ -1,245 +1,258 @@
 // script.js — Limit Order Book Simulator
 //
-// Pure in-browser price-time priority matching engine.
-// Background market makers generate random order flow continuously;
-// visitors can place their own orders through the form.
+// Routes all engine calls through the C++ MatchingEngine compiled to WASM,
+// or to the native engine_server (localhost:8765) if running.
+// Rendering functions are unchanged; book state is populated from C++ JSON.
 
 'use strict';
 
-// ── In-browser matching engine ────────────────────────────────────────────────
+// ── Engine bridge ──────────────────────────────────────────────────────────────
 
-let nextId      = 1;
+let engineReady = false;
+let useNative   = false;
+
+function updateModeBadge() {
+  const badge = document.getElementById('mode-badge');
+  if (!badge) return;
+  if (useNative) {
+    badge.textContent = '● NATIVE C++';
+    badge.className   = 'mode-badge mode-native';
+  } else {
+    badge.textContent = '● WASM';
+    badge.className   = 'mode-badge mode-wasm';
+  }
+}
+
+// Auto-detect native server; fall back to WASM silently
+fetch('http://localhost:8765/health', { signal: AbortSignal.timeout(800) })
+  .then(r => r.json())
+  .then(d => { if (d.ok) { useNative = true; updateModeBadge(); if (!engineReady) startEngineInit(); } })
+  .catch(() => { /* WASM */ });
+
+// WASM init (via engine.js loaded in HTML)
+if (window._wasmLoadFailed) {
+  console.warn('engine.js not found — will use native server if available');
+} else if (typeof Module !== 'undefined') {
+  Module.onRuntimeInitialized = function () {
+    engineReady = true;
+    startEngineInit();
+  };
+}
+
+function startEngineInit() {
+  // Restore JS-side state saved before the last tab navigation
+  const restored = tryRestoreState();
+
+  if (useNative) {
+    // Native server state persists across tab switches — never reset it.
+    // Just sync current book state via a tick.
+    generateBatch()
+      .then(() => { if (!restored) recordMid(); render(); startSim(); })
+      .catch(e => console.error('native tick failed:', e));
+  } else {
+    currentSessionIds.clear();
+    Module._wasm_reset();
+    generateBatch().then(() => { if (!restored) recordMid(); render(); startSim(); });
+  }
+}
+
+// Unified engine call: routes to WASM or native server
+async function callEngine(wasmFn, wasmArgs, nativePath, nativeBody) {
+  if (useNative) {
+    try {
+      const r = await fetch('http://localhost:8765' + nativePath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nativeBody)
+      });
+      return r.json();
+    } catch (_) {
+      // Native server went away — fall back to WASM silently
+      useNative = false;
+      updateModeBadge();
+    }
+  }
+  if (!engineReady) return null;
+  const raw = Module[wasmFn](...wasmArgs);
+  return JSON.parse(Module.UTF8ToString(raw));
+}
+
+// ── Book state (populated from C++ JSON) ──────────────────────────────────────
+
 let simTime     = 0;
 let totalOrders = 0;
 let totalTrades = 0;
+let bookResting = 0;   // from stats.resting in C++ response
+let midPrice    = 100;
 
-// bids / asks: Map<price, {orders: Array<{id,qty}>, vol: number}>
-// vol is maintained incrementally — O(1) reads, no per-render reduce (F5).
+// bids/asks: Map<price, {orders: [], vol: number}>
+// Kept in same shape as before so render functions work unchanged.
 const bids       = new Map();
 const asks       = new Map();
-const orderIndex = new Map();  // id → {side, price}
-const trades     = [];         // newest first, max 20
+const orderIndex = new Map();  // id → {side, price} — populated from fills/submits
+const trades     = [];
 
-let midPrice = 100;
-
-// Fill hooks — called whenever any maker order is filled.
-// Signature: hook(makerId: number, fillQty: number)
-const fillHooks = [];
-
-// ── Matching engine helpers ───────────────────────────────────────────────────
-
-// bestBidPrice / bestAskPrice: O(1) maintained variables (F6).
-// null when the respective side is empty.
 let bestBidPrice = null;
 let bestAskPrice = null;
 
 function bestBid() { return bestBidPrice; }
 function bestAsk() { return bestAskPrice; }
 
-function _recomputeBest(side) {
-  if (side === 'bid') {
-    bestBidPrice = bids.size === 0 ? null : Math.max(...bids.keys());
-  } else {
-    bestAskPrice = asks.size === 0 ? null : Math.min(...asks.keys());
+// ── Apply C++ JSON response to local state ────────────────────────────────────
+
+function applyBookState(data) {
+  if (!data) return;
+
+  // Rebuild bids/asks maps
+  bids.clear();
+  asks.clear();
+  for (const b of (data.bids || [])) bids.set(b.price, { orders: [], vol: b.vol });
+  for (const a of (data.asks || [])) asks.set(a.price, { orders: [], vol: a.vol });
+
+  // Best prices
+  bestBidPrice = data.bids && data.bids.length > 0 ? data.bids[0].price : null;
+  bestAskPrice = data.asks && data.asks.length > 0 ? data.asks[0].price : null;
+
+  // Stats
+  if (data.stats) {
+    totalOrders = data.stats.totalOrders;
+    totalTrades = data.stats.totalTrades;
+    bookResting = data.stats.resting;
+    if (data.stats.mid) midPrice = data.stats.mid;
   }
-}
 
-function _getOrCreateLevel(book, price) {
-  if (!book.has(price)) book.set(price, { orders: [], vol: 0 });
-  return book.get(price);
-}
-
-// Returns filled qty. Walks levels from best price inward without sorting (F4).
-function matchAgainst(takerSide, limitPrice, qty) {
-  const oppBook  = takerSide === 'buy' ? asks : bids;
-  const oppSide  = takerSide === 'buy' ? 'ask' : 'bid';
-  let   remaining = qty;
-
-  while (remaining > 0) {
-    // O(1) best-price lookup via maintained variable (F4 + F6)
-    const levelPrice = takerSide === 'buy' ? bestAskPrice : bestBidPrice;
-    if (levelPrice === null) break;
-    if (limitPrice !== null) {
-      if (takerSide === 'buy'  && levelPrice > limitPrice) break;
-      if (takerSide === 'sell' && levelPrice < limitPrice) break;
-    }
-
-    const level = oppBook.get(levelPrice);
-    while (level.orders.length > 0 && remaining > 0) {
-      const maker = level.orders[0];
-      const fill  = Math.min(remaining, maker.qty);
-      maker.qty    -= fill;
-      remaining    -= fill;
-      level.vol    -= fill;   // O(1) volume update (F5)
-
-      const aggressor = takerSide === 'buy' ? 'BUY' : 'SELL';
-      trades.unshift({ t: simTime, price: levelPrice, qty: fill, aggressor });
-      if (trades.length > 20) trades.pop();
-      totalTrades++;
-
-      // Notify watchers — isolated so a hook error cannot abort mid-fill (F3)
-      for (const h of fillHooks) {
-        try { h(maker.id, fill); } catch (err) { console.error('fillHook error:', err); }
-      }
-
-      if (maker.qty <= 0) {
-        level.orders.shift();
-        orderIndex.delete(maker.id);
-      }
-    }
-    if (level.orders.length === 0) {
-      oppBook.delete(levelPrice);
-      _recomputeBest(oppSide);   // only recomputed on level deletion (F4)
-    }
+  // Trades
+  trades.length = 0;
+  for (const t of (data.trades || [])) {
+    trades.push({ t: t.t, price: t.price, qty: t.qty,
+                  aggressor: t.side === 'buy' ? 'BUY' : 'SELL' });
   }
-  return qty - remaining;
-}
+  simTime = trades.length > 0 ? trades[0].t : simTime;
 
-// Returns {id: number|null, filledQty, restingQty}
-// id is non-null only when a remainder rests in the book.
-function submitLimit(side, price, qty) {
-  totalOrders++;
-  simTime++;
-  const filledQty  = matchAgainst(side, price, qty);
-  const restingQty = qty - filledQty;
-  let id = null;
-  if (restingQty > 0) {
-    id = nextId++;
-    const book  = side === 'buy' ? bids : asks;
-    const level = _getOrCreateLevel(book, price);
-    level.orders.push({ id, qty: restingQty });
-    level.vol += restingQty;   // O(1) volume update (F5)
-    orderIndex.set(id, { side, price });
-    // Update best price if this level beats the current best (F6)
-    if (side === 'buy') {
-      if (bestBidPrice === null || price > bestBidPrice) bestBidPrice = price;
+  // Process fills → update user order status.
+  // In WASM mode, only process fills from the current engine session; restored
+  // orders from a previous session cannot receive fills from a fresh engine, and
+  // new engine IDs can collide with old restingIds causing phantom status changes.
+  for (const fill of (data.fills || [])) {
+    if (!useNative && !currentSessionIds.has(fill.maker_id)) continue;
+    const uo = userOrderMap.get(fill.maker_id);
+    if (!uo || uo.status === 'CANCELED') continue;
+    uo.filledQty = Math.min(uo.filledQty + fill.qty, uo.origQty);
+    if (uo.filledQty >= uo.origQty) {
+      uo.status = 'FILLED';
+      userOrderMap.delete(fill.maker_id);
     } else {
-      if (bestAskPrice === null || price < bestAskPrice) bestAskPrice = price;
+      uo.status = 'PARTIAL';
     }
   }
-  return { id, filledQty, restingQty };
-}
 
-// Returns {filledQty}
-function submitMarket(side, qty) {
-  totalOrders++;
-  simTime++;
-  const filledQty = matchAgainst(side, null, qty);
-  return { filledQty };
-}
-
-function cancelOrder(id) {
-  const info = orderIndex.get(id);
-  if (!info) return false;
-  const book  = info.side === 'buy' ? bids : asks;
-  const level = book.get(info.price);
-  if (level) {
-    const idx = level.orders.findIndex(o => o.id === id);
-    if (idx !== -1) {
-      level.vol -= level.orders[idx].qty;   // O(1) volume update (F5)
-      level.orders.splice(idx, 1);
-    }
-    if (level.orders.length === 0) {
-      book.delete(info.price);
-      _recomputeBest(info.side === 'buy' ? 'bid' : 'ask');   // (F6)
+  // Keep orderIndex for cancel-button visibility checks
+  // We reconstruct from userOrderMap (only user orders need cancel buttons)
+  orderIndex.clear();
+  for (const [id, uo] of userOrderMap) {
+    if (uo.status === 'OPEN' || uo.status === 'PARTIAL') {
+      orderIndex.set(id, { side: uo.side, price: uo.price });
     }
   }
-  orderIndex.delete(id);
-  // Keep user order status in sync regardless of who called cancel (F2)
-  const uo = userOrderMap.get(id);
-  if (uo) { uo.status = 'CANCELED'; userOrderMap.delete(id); }
-  return true;
 }
 
-// ── User order tracking ───────────────────────────────────────────────────────
-// Each entry: {localId, restingId, side, type, price, origQty, filledQty, status}
-// status: 'OPEN' | 'PARTIAL' | 'FILLED' | 'CANCELED' | 'UNFILLED'
-
-const userOrders   = [];             // ordered by submission, newest appended last
-const userOrderMap = new Map();      // restingId → entry (for O(1) fill updates)
-let   userOrderSeq = 0;
-
-// Register a fill hook that updates user order status in real time.
-fillHooks.push((makerId, fillQty) => {
-  const uo = userOrderMap.get(makerId);
-  if (!uo || uo.status === 'CANCELED') return;
-  uo.filledQty = Math.min(uo.filledQty + fillQty, uo.origQty);
-  if (uo.filledQty >= uo.origQty) {
-    uo.status = 'FILLED';
-    userOrderMap.delete(makerId);
-  } else {
-    uo.status = 'PARTIAL';
-  }
-});
-
-function addUserOrder(restingId, side, type, price, origQty, filledQty, restingQty) {
-  let status;
-  if (type === 'market') {
-    // Market orders never rest; remainder is silently dropped (F10)
-    status = filledQty >= origQty ? 'FILLED' : filledQty > 0 ? 'PARTIAL' : 'REJECTED';
-  } else {
-    status = restingQty === 0 ? 'FILLED' : filledQty > 0 ? 'PARTIAL' : 'OPEN';
-  }
-
-  const uo = { localId: userOrderSeq++, restingId, side, type, price, origQty, filledQty, status };
-  userOrders.push(uo);
-  if (userOrders.length > 20) userOrders.shift();
-  if (restingId !== null) userOrderMap.set(restingId, uo);
-  return uo;
-}
-
-// ── Price history ─────────────────────────────────────────────────────────────
+// ── Price history ──────────────────────────────────────────────────────────────
 
 const priceHistory = [];
 const MAX_HISTORY  = 300;
 
 function recordMid() {
-  const bb = bestBid(), ba = bestAsk();
-  if (bb === null || ba === null) return;
-  priceHistory.push({ t: simTime, mid: (bb + ba) / 2 });
+  if (bestBidPrice === null || bestAskPrice === null) return;
+  const mid = (bestBidPrice + bestAskPrice) / 2;
+  priceHistory.push({ t: simTime, mid });
   if (priceHistory.length > MAX_HISTORY) priceHistory.shift();
 }
 
-// ── Pseudo-random workload ────────────────────────────────────────────────────
+// ── User order tracking ────────────────────────────────────────────────────────
 
-let seed = Date.now() & 0xffffffff;
-function rand() {
-  seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
-  return (seed >>> 0) / 0x100000000;
-}
-function randInt(lo, hi) { return lo + Math.floor(rand() * (hi - lo + 1)); }
+const userOrders      = [];
+const userOrderMap    = new Map();  // restingId → entry
+const currentSessionIds = new Set(); // WASM: restingIds placed in the current engine session
+let   userOrderSeq    = 0;
 
-function driftMid() {
-  const r = rand();
-  if      (r < 0.30) midPrice = Math.max(60,  midPrice - 1);
-  else if (r > 0.70) midPrice = Math.min(160, midPrice + 1);
-}
-
-function generateBatch() {
-  driftMid();
-  const n = randInt(1, 5);
-  for (let i = 0; i < n; i++) {
-    const r = rand();
-    if (r < 0.55) {
-      const side   = rand() < 0.5 ? 'buy' : 'sell';
-      const offset = randInt(0, 6);
-      const price  = side === 'buy' ? midPrice - offset : midPrice + offset;
-      submitLimit(side, Math.max(1, price), randInt(10, 250));
-    } else if (r < 0.85) {
-      // Exclude user resting orders from background cancels (F1)
-      const ids = [...orderIndex.keys()].filter(id => !userOrderMap.has(id));
-      if (ids.length > 0) {
-        cancelOrder(ids[Math.floor(rand() * ids.length)]);
-      }
-    } else {
-      submitMarket(rand() < 0.5 ? 'buy' : 'sell', randInt(10, 100));
-    }
+function addUserOrder(restingId, side, type, price, origQty, filledQty, restingQty, elapsed_ns, avgFillPrice) {
+  let status;
+  if (type === 'market') {
+    status = filledQty >= origQty ? 'FILLED' : filledQty > 0 ? 'PARTIAL' : 'REJECTED';
+  } else {
+    status = restingQty === 0 ? 'FILLED' : filledQty > 0 ? 'PARTIAL' : 'OPEN';
   }
+
+  const uo = {
+    localId: userOrderSeq++, restingId, side, type, price, origQty,
+    filledQty, status, elapsed_ns: elapsed_ns || 0,
+    avgFillPrice: avgFillPrice || 0
+  };
+  userOrders.push(uo);
+  if (userOrders.length > 20) userOrders.shift();
+  if (restingId !== null) {
+    userOrderMap.set(restingId, uo);
+    if (!useNative) currentSessionIds.add(restingId);
+  }
+  return uo;
+}
+
+function computeAvgFillPrice(fills) {
+  if (!fills || fills.length === 0) return 0;
+  let totalQty = 0, totalValue = 0;
+  for (const f of fills) { totalQty += f.qty; totalValue += f.qty * f.price; }
+  return totalQty > 0 ? totalValue / totalQty : 0;
+}
+
+// ── Engine action wrappers ─────────────────────────────────────────────────────
+
+async function submitLimit(side, price, qty) {
+  const sideInt = side === 'buy' ? 0 : 1;
+  return callEngine(
+    '_wasm_submit_limit', [sideInt, price, qty],
+    '/submit_limit', { side: sideInt, price, qty }
+  );
+}
+
+async function submitMarket(side, qty) {
+  const sideInt = side === 'buy' ? 0 : 1;
+  return callEngine(
+    '_wasm_submit_market', [sideInt, qty],
+    '/submit_market', { side: sideInt, qty }
+  );
+}
+
+async function cancelOrder(id) {
+  if (useNative) {
+    // Native: server retains full order state; cancel is authoritative.
+    const data = await callEngine('_wasm_cancel', [id], '/cancel', { id });
+    applyBookState(data);
+    const uo = userOrderMap.get(id);
+    if (uo) { uo.status = 'CANCELED'; userOrderMap.delete(id); }
+  } else {
+    // WASM: engine may have been reset since the order was placed (tab navigation).
+    // Always update the UI regardless; the engine call is best-effort.
+    try {
+      const data = await callEngine('_wasm_cancel', [id], '/cancel', { id });
+      applyBookState(data);
+    } catch (_) {}
+    const uo = userOrderMap.get(id);
+    if (uo) { uo.status = 'CANCELED'; userOrderMap.delete(id); currentSessionIds.delete(id); }
+  }
+  orderIndex.delete(id);
   recordMid();
   render();
 }
 
-// ── Rendering ─────────────────────────────────────────────────────────────────
+async function generateBatch() {
+  const data = await callEngine(
+    '_wasm_tick', [],
+    '/tick', {}
+  );
+  applyBookState(data);
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────────────
 
 const BOOK_LEVELS  = 8;
 const HEATMAP_ROWS = 14;
@@ -257,7 +270,7 @@ function render() {
 function renderOrderBook() {
   const topBids = [...bids.entries()]
     .sort((a, b) => b[0] - a[0]).slice(0, BOOK_LEVELS)
-    .map(([p, lvl]) => [p, lvl.vol]);   // O(1) vol read (F5)
+    .map(([p, lvl]) => [p, lvl.vol]);
   const topAsks = [...asks.entries()]
     .sort((a, b) => a[0] - b[0]).slice(0, BOOK_LEVELS)
     .map(([p, lvl]) => [p, lvl.vol]);
@@ -306,7 +319,7 @@ function renderOrderBook() {
 
 function renderHeatmap() {
   const all = new Map();
-  for (const [p, lvl] of bids) all.set(p, { v: lvl.vol, side: 'bid' });   // O(1) (F5)
+  for (const [p, lvl] of bids) all.set(p, { v: lvl.vol, side: 'bid' });
   for (const [p, lvl] of asks) all.set(p, { v: lvl.vol, side: 'ask' });
 
   const prices = [...all.keys()].sort((a, b) => b - a).slice(0, HEATMAP_ROWS);
@@ -348,13 +361,13 @@ function renderTrades() {
 function renderStats() {
   document.getElementById('stat-orders').textContent  = totalOrders.toLocaleString();
   document.getElementById('stat-trades').textContent  = totalTrades.toLocaleString();
-  document.getElementById('stat-resting').textContent = orderIndex.size.toLocaleString();
+  document.getElementById('stat-resting').textContent = bookResting.toLocaleString();
   const bb = bestBid(), ba = bestAsk();
   document.getElementById('stat-mid').textContent =
     bb !== null && ba !== null ? ((bb + ba) / 2).toFixed(1) : '—';
 }
 
-// ── User orders panel ─────────────────────────────────────────────────────────
+// ── User orders panel ──────────────────────────────────────────────────────────
 
 function renderUserOrders() {
   const panel = document.getElementById('user-orders-panel');
@@ -363,7 +376,6 @@ function renderUserOrders() {
   if (userOrders.length === 0) { panel.style.display = 'none'; return; }
   panel.style.display = '';
 
-  // Newest first — iterate backwards to avoid allocating a reversed copy (F12)
   const rows = [];
   for (let i = userOrders.length - 1; i >= 0; i--) {
     const uo = userOrders[i];
@@ -372,14 +384,27 @@ function renderUserOrders() {
     const fillPct  = uo.origQty > 0 ? Math.min(100, (uo.filledQty / uo.origQty * 100)) : 100;
     const statusCls = `uo-status-${uo.status.toLowerCase()}`;
 
-    // Cancel button only for open/partial resting orders still in the book
     const canCancel = (uo.status === 'OPEN' || uo.status === 'PARTIAL')
-                      && uo.restingId !== null
-                      && orderIndex.has(uo.restingId);
-
+                      && uo.restingId !== null;
     const cancelBtn = canCancel
       ? `<button class="btn btn-cancel-order" data-id="${uo.restingId}" title="Cancel order">✕</button>`
       : `<span class="uo-no-cancel"></span>`;
+
+    // Fill time display
+    const fillTime = uo.elapsed_ns > 0
+      ? (useNative
+          ? `${uo.elapsed_ns}ns`
+          : `${Math.round(uo.elapsed_ns / 1000)}µs`)
+      : '—';
+
+    // Slippage: avg fill price vs limit price (for limit orders with fills)
+    let slippageTxt = '—';
+    if (uo.type === 'limit' && uo.avgFillPrice > 0 && uo.filledQty > 0) {
+      const slip = uo.side === 'buy'
+        ? uo.price - uo.avgFillPrice    // positive = favorable (paid less)
+        : uo.avgFillPrice - uo.price;   // positive = favorable (received more)
+      slippageTxt = slip === 0 ? '0' : (slip > 0 ? `+${slip.toFixed(0)}` : slip.toFixed(0));
+    }
 
     rows.push(`<div class="uo-row">
       <span class="uo-side-badge ${sideCls}">${uo.side.toUpperCase()}</span>
@@ -391,25 +416,31 @@ function renderUserOrders() {
              style="width:${fillPct.toFixed(0)}%"></div>
       </div>
       <span class="uo-fill-count">${uo.filledQty}/${uo.origQty}</span>
+      <span class="uo-fill-time">${fillTime}</span>
+      <span class="uo-slippage">${slippageTxt}</span>
       <span class="uo-status ${statusCls}">● ${uo.status}</span>
       ${cancelBtn}
     </div>`);
   }
-  list.innerHTML = rows.join('');
+  const header = `<div class="uo-row uo-col-header">
+  <span>SIDE</span><span>TYPE</span><span>PRICE</span><span>QTY</span>
+  <span>FILL</span><span>DONE</span><span>TIME</span><span>SLIP</span>
+  <span>STATUS</span><span></span>
+</div>`;
+  list.innerHTML = header + rows.join('');
 }
 
-// Event delegation — one listener handles all cancel buttons.
-document.getElementById('user-orders-list').addEventListener('click', e => {
+document.getElementById('user-orders-list').addEventListener('mousedown', e => {
   const btn = e.target.closest('.btn-cancel-order');
   if (!btn) return;
+  e.preventDefault(); // prevent focus ring / text-selection side effects
   const id = parseInt(btn.dataset.id, 10);
-  cancelOrder(id);
-  const uo = userOrderMap.get(id);
-  if (uo) { uo.status = 'CANCELED'; userOrderMap.delete(id); }
-  render();
+  cancelOrder(id).catch(err => {
+    console.error('Cancel failed:', err);
+  });
 });
 
-// ── Price chart (canvas) ──────────────────────────────────────────────────────
+// ── Price chart (canvas) ───────────────────────────────────────────────────────
 
 const CHART_H = 140;
 
@@ -463,7 +494,6 @@ function renderPriceChart() {
   const rising    = mids[n - 1] >= mids[0];
   const lineColor = rising ? '#00d26a' : '#ff4757';
 
-  // Grid lines
   ctx.strokeStyle = '#1e2d45'; ctx.lineWidth = 1;
   ctx.font = '10px Courier New, monospace'; ctx.fillStyle = '#5a6a80'; ctx.textAlign = 'left';
   for (let g = 0; g <= 4; g++) {
@@ -472,7 +502,6 @@ function renderPriceChart() {
     ctx.fillText((hi - (g / 4) * (hi - lo)).toFixed(1), W - PAD_R + 6, y + 3);
   }
 
-  // Gradient fill
   const grad = ctx.createLinearGradient(0, PAD_T, 0, PAD_T + cH);
   grad.addColorStop(0, rising ? 'rgba(0,210,106,0.22)' : 'rgba(255,71,87,0.22)');
   grad.addColorStop(1, 'rgba(0,0,0,0)');
@@ -482,7 +511,6 @@ function renderPriceChart() {
   ctx.lineTo(xOf(n - 1), PAD_T + cH);
   ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-  // Price line
   ctx.beginPath();
   priceHistory.forEach((p, i) => {
     if (i === 0) ctx.moveTo(xOf(i), yOf(p.mid));
@@ -490,38 +518,32 @@ function renderPriceChart() {
   });
   ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke();
 
-  // Dashed crosshair at current price
   const lastY = yOf(mids[n - 1]);
   ctx.setLineDash([3, 3]); ctx.strokeStyle = lineColor;
   ctx.lineWidth = 0.8; ctx.globalAlpha = 0.5;
   ctx.beginPath(); ctx.moveTo(PAD_L, lastY); ctx.lineTo(PAD_L + cW, lastY); ctx.stroke();
   ctx.setLineDash([]); ctx.globalAlpha = 1;
 
-  // Dot
   ctx.beginPath(); ctx.arc(xOf(n - 1), lastY, 3.5, 0, Math.PI * 2);
   ctx.fillStyle = lineColor; ctx.fill();
 
-  // Current price label
   ctx.fillStyle = lineColor; ctx.font = 'bold 10px Courier New, monospace'; ctx.textAlign = 'left';
   ctx.fillText(mids[n - 1].toFixed(1), W - PAD_R + 6, lastY + 4);
 }
 
-// Debounced resize — avoids GPU texture reallocation on every drag pixel (F7)
 let _resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(_resizeTimer);
   _resizeTimer = setTimeout(() => { resizeChart(); renderPriceChart(); }, 120);
 });
 
-// ── User order form ───────────────────────────────────────────────────────────
+// ── User order form ────────────────────────────────────────────────────────────
 
 document.getElementById('u-type').addEventListener('change', function () {
   document.getElementById('price-field').style.display =
     this.value === 'market' ? 'none' : '';
 });
 
-// Auto-fill price with current mid when field receives focus and hasn't been
-// manually edited — prevents default 100 being far from a drifted market (F8)
 document.getElementById('u-price').addEventListener('focus', function () {
   const bb = bestBid(), ba = bestAsk();
   if (bb !== null && ba !== null)
@@ -534,7 +556,7 @@ function _setFormError(msg) {
   el.style.display = msg ? '' : 'none';
 }
 
-document.getElementById('user-order-form').addEventListener('submit', e => {
+document.getElementById('user-order-form').addEventListener('submit', async e => {
   e.preventDefault();
   _setFormError('');
 
@@ -543,21 +565,37 @@ document.getElementById('user-order-form').addEventListener('submit', e => {
   const price = parseInt(document.getElementById('u-price').value, 10);
   const qty   = parseInt(document.getElementById('u-qty').value,   10);
 
-  // Validated input with inline error feedback (F9)
   if (isNaN(qty) || qty <= 0) { _setFormError('Quantity must be a positive integer.'); return; }
   if (type === 'limit' && (isNaN(price) || price <= 0)) { _setFormError('Limit price must be a positive integer.'); return; }
 
-  let restingId, filledQty, restingQty;
-
+  let data;
   if (type === 'market') {
-    const r = submitMarket(side, qty);
-    restingId = null; filledQty = r.filledQty; restingQty = 0;
+    data = await submitMarket(side, qty);
   } else {
-    const r = submitLimit(side, price, qty);
-    restingId = r.id; filledQty = r.filledQty; restingQty = r.restingQty;
+    data = await submitLimit(side, price, qty);
   }
 
-  addUserOrder(restingId, side, type, type === 'market' ? null : price, qty, filledQty, restingQty);
+  if (!data) { _setFormError('Engine not ready.'); return; }
+
+  applyBookState(data);
+
+  const fills    = data.fills || [];
+  const elapsed  = data.elapsed_ns || 0;
+  const avgFill  = computeAvgFillPrice(fills);
+
+  let restingId = null, filledQty = 0, restingQty = 0;
+  if (type === 'market') {
+    filledQty = fills.reduce((s, f) => s + f.qty, 0);
+  } else {
+    // id in response is the resting order ID (0 if fully filled immediately)
+    restingId   = data.id > 0 ? data.id : null;
+    filledQty   = fills.reduce((s, f) => s + f.qty, 0);
+    restingQty  = qty - filledQty;
+  }
+
+  addUserOrder(restingId, side, type, type === 'market' ? null : price,
+               qty, filledQty, restingQty, elapsed, avgFill);
+
   recordMid();
   render();
 
@@ -567,14 +605,18 @@ document.getElementById('user-order-form').addEventListener('submit', e => {
   setTimeout(() => { btn.textContent = 'Submit Order'; btn.classList.remove('btn-placed'); }, 700);
 });
 
-// ── Simulation controls ───────────────────────────────────────────────────────
+// ── Simulation controls ────────────────────────────────────────────────────────
 
 let simInterval = null;
 let simSpeed    = 300;
 
 function startSim() {
   if (simInterval) return;
-  simInterval = setInterval(generateBatch, simSpeed);
+  simInterval = setInterval(async () => {
+    await generateBatch();
+    recordMid();
+    render();
+  }, simSpeed);
   document.getElementById('btn-pause').disabled  = false;
   document.getElementById('btn-resume').disabled = true;
 }
@@ -595,16 +637,76 @@ document.getElementById('speed').addEventListener('input', function () {
   if (simInterval) { pauseSim(); startSim(); }
 });
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
+// ── Session state — persist across tab navigation ──────────────────────────────
 
-(function seedBook() {
-  for (let depth = 1; depth <= 8; depth++) {
-    submitLimit('buy',  midPrice - depth, randInt(100, 400));
-    submitLimit('sell', midPrice + depth, randInt(100, 400));
+const SESSION_KEY = 'lobSession';
+
+function saveState() {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      priceHistory,
+      userOrders,
+      simSpeed,
+      totalOrders,
+      totalTrades,
+    }));
+  } catch (_) { /* storage full or unavailable */ }
+}
+
+function tryRestoreState() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+
+    if (Array.isArray(s.priceHistory) && s.priceHistory.length > 0) {
+      priceHistory.push(...s.priceHistory.slice(-MAX_HISTORY));
+      const last = priceHistory[priceHistory.length - 1];
+      if (last) {
+        bestBidPrice = last.mid + 0.5;  // approximate until first tick
+        bestAskPrice = last.mid + 0.5;
+      }
+    }
+
+    if (Array.isArray(s.userOrders)) {
+      userOrders.push(...s.userOrders);
+      userOrderSeq = userOrders.length;
+      // Rebuild userOrderMap only for orders that can still receive fills
+      for (const uo of userOrders) {
+        if (uo.restingId !== null &&
+            (uo.status === 'OPEN' || uo.status === 'PARTIAL')) {
+          userOrderMap.set(uo.restingId, uo);
+        }
+      }
+    }
+
+    if (s.simSpeed) {
+      simSpeed = s.simSpeed;
+      const slider = document.getElementById('speed');
+      if (slider) { slider.value = simSpeed; }
+      const label = document.getElementById('speed-val');
+      if (label) label.textContent = simSpeed + 'ms';
+    }
+
+    if (s.totalOrders) totalOrders = s.totalOrders;
+    if (s.totalTrades) totalTrades = s.totalTrades;
+
+    return true;
+  } catch (_) {
+    return false;
   }
-  recordMid();
-})();
+}
+
+// Save before any navigation away from this page
+window.addEventListener('beforeunload', saveState);
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────────
 
 resizeChart();
 render();
-startSim();
+
+// If WASM is already initialised synchronously (unlikely but possible in some builds):
+if (typeof Module !== 'undefined' && Module.calledRun) {
+  engineReady = true;
+  startEngineInit();
+}

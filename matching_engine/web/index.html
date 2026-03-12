@@ -15,16 +15,23 @@
       <span class="subtitle">C++ Price-Time Priority Matching Engine · Interactive Simulator</span>
     </div>
     <div class="header-right">
+      <span id="mode-badge" class="mode-badge mode-wasm">● WASM</span>
       <span class="live-dot-wrap"><span class="live-dot"></span> LIVE</span>
     </div>
   </header>
+
+  <!-- ── Tab navigation ──────────────────────────────────────────────────── -->
+  <nav class="tab-nav">
+    <a href="index.html"     class="tab-btn active">LIVE BOOK</a>
+    <a href="benchmark.html" class="tab-btn">BENCHMARK</a>
+  </nav>
 
   <!-- ── Live explanation banner ─────────────────────────────────────────── -->
   <div class="live-banner">
     <span class="live-banner-note">NOTE —</span>
     The simulation is <strong>intentionally throttled</strong> for visual clarity (adjustable via Speed).
-    The real C++ engine runs at <strong>13M ops/sec · p50 42 ns · p99 292 ns</strong> on a single thread —
-    verified by <code>./build/benchmark_runner</code> and <code>./build/order_book_tests</code>.
+    The real C++ engine runs at <strong>8–13M ops/sec · p50 42–80 ns · p99 ≤300 ns</strong> on a single thread.
+    Visit the <strong>BENCHMARK</strong> tab to run it yourself — or download the native server for true nanosecond timing.
     Place your own orders below to interact with the live book.
   </div>
 
@@ -139,6 +146,7 @@
     </div>
   </section>
 
+  <script src="engine.js" onerror="window._wasmLoadFailed=true"></script>
   <script src="script.js"></script>
 </body>
 </html>

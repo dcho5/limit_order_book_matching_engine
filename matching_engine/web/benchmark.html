@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benchmark — Limit Order Book</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <h1>Limit Order Book <span class="sim-badge">LIVE</span></h1>
+      <span class="subtitle">C++ Price-Time Priority Matching Engine · Interactive Simulator</span>
+    </div>
+    <div class="header-right">
+      <span id="mode-badge" class="mode-badge mode-wasm">● WASM</span>
+    </div>
+  </header>
+
+  <!-- ── Tab navigation ──────────────────────────────────────────────────── -->
+  <nav class="tab-nav">
+    <a href="index.html"     class="tab-btn">LIVE BOOK</a>
+    <a href="benchmark.html" class="tab-btn active">BENCHMARK</a>
+  </nav>
+
+  <!-- ── Benchmark panel ─────────────────────────────────────────────────── -->
+  <section class="bench-panel bench-page-panel">
+    <h2 class="panel-title bench-panel-title">PERFORMANCE BENCHMARK</h2>
+    <p class="bench-subtitle">
+      Run the actual C++ matching engine and measure throughput and latency.
+      In <strong>WASM mode</strong>, timing resolution is ~0.1 ms (browser limitation) —
+      latencies are per-operation averages over batches of 10,000 (~10ns precision).
+      In <strong>NATIVE C++</strong> mode (run <code>./engine_server</code>), timing uses
+      <code>std::chrono::high_resolution_clock</code> for true nanosecond resolution.
+    </p>
+
+    <details class="native-instructions">
+      <summary class="native-instructions-toggle">▶ HOW TO ENABLE NATIVE C++ MODE</summary>
+      <div class="native-instructions-body">
+        <ol>
+          <li>
+            <strong>Download</strong> the binary for your OS from
+            <a href="https://github.com/dcho-jaewook/limit-order-book-matching-engine/releases/latest"
+               style="color:var(--yellow)">GitHub Releases</a>:<br>
+            <code>engine_server-mac-arm64</code> &nbsp;·&nbsp;
+            <code>engine_server-mac-x86_64</code> &nbsp;·&nbsp;
+            <code>engine_server-linux-x86_64</code> &nbsp;·&nbsp;
+            <code>engine_server-windows-x64.exe</code>
+          </li>
+          <li>
+            <strong>Run it in a terminal:</strong><br>
+            macOS / Linux: <code>chmod +x engine_server-mac-arm64 &amp;&amp; ./engine_server-mac-arm64</code><br>
+            Windows: double-click or run <code>engine_server-windows-x64.exe</code> in PowerShell
+          </li>
+          <li>
+            <strong>Reload this page.</strong> The mode badge will switch to
+            <span style="color:var(--green)">● NATIVE C++</span> automatically.
+          </li>
+        </ol>
+        <p class="native-instructions-note">
+          <strong>What to expect:</strong> 8–13M ops/sec · p50 42–80 ns · p99 ≤300 ns ·
+          true nanosecond resolution via <code>std::chrono::high_resolution_clock</code>.
+          The server runs locally — no data leaves your machine.<br>
+          <strong>Safari on GitHub Pages:</strong> Safari blocks localhost connections from HTTPS pages.
+          Use Chrome or Firefox, or serve the page locally via <code>python3 -m http.server 8080</code>.
+        </p>
+      </div>
+    </details>
+
+    <div class="bench-controls">
+      <div class="bench-input-group">
+        <label class="field-label" for="bench-ops">Operations</label>
+        <input id="bench-ops" type="number" min="10000" max="35000000"
+               step="1000" value="100000" class="bench-input">
+        <span class="bench-input-hint">10K – 35M</span>
+      </div>
+      <div class="bench-input-group">
+        <label class="field-label" for="bench-limit-pct">Limit %</label>
+        <input id="bench-limit-pct" type="number" min="0" max="100"
+               step="1" value="60" class="bench-input bench-input-sm">
+      </div>
+      <div class="bench-input-group">
+        <label class="field-label" for="bench-cancel-pct">Cancel %</label>
+        <input id="bench-cancel-pct" type="number" min="0" max="100"
+               step="1" value="30" class="bench-input bench-input-sm">
+      </div>
+      <div class="bench-input-group">
+        <label class="field-label" for="bench-market-pct">Market %</label>
+        <input id="bench-market-pct" type="number" min="0" max="100"
+               step="1" value="10" class="bench-input bench-input-sm">
+      </div>
+      <div class="bench-input-group bench-btn-group">
+        <button id="bench-run-btn" class="btn btn-primary bench-run-btn">
+          RUN BENCHMARK
+        </button>
+        <span id="bench-error" class="bench-error" style="display:none"></span>
+      </div>
+    </div>
+
+    <div id="bench-results" class="bench-results" style="display:none">
+      <div class="bench-stat">
+        <span class="bench-stat-label">THROUGHPUT</span>
+        <span id="bench-throughput" class="bench-stat-value bench-val-yellow">—</span>
+        <span class="bench-stat-unit">ops/sec</span>
+      </div>
+      <div class="bench-stat">
+        <span class="bench-stat-label">p50 LATENCY</span>
+        <span id="bench-p50" class="bench-stat-value">—</span>
+        <span id="bench-p50-unit" class="bench-stat-unit">ns</span>
+      </div>
+      <div class="bench-stat">
+        <span class="bench-stat-label">p99 LATENCY</span>
+        <span id="bench-p99" class="bench-stat-value">—</span>
+        <span id="bench-p99-unit" class="bench-stat-unit">ns</span>
+      </div>
+      <div class="bench-stat">
+        <span class="bench-stat-label">p999 LATENCY</span>
+        <span id="bench-p999" class="bench-stat-value">—</span>
+        <span id="bench-p999-unit" class="bench-stat-unit">ns</span>
+      </div>
+      <div class="bench-stat">
+        <span class="bench-stat-label">ELAPSED</span>
+        <span id="bench-elapsed" class="bench-stat-value bench-val-dim">—</span>
+        <span class="bench-stat-unit">ms</span>
+      </div>
+    </div>
+
+    <!-- Latency histogram -->
+    <div id="bench-histogram-wrap" style="display:none" class="bench-histogram-wrap">
+      <div class="bench-hist-label">LATENCY DISTRIBUTION (per-batch per-op average, ns)</div>
+      <canvas id="bench-histogram" class="bench-histogram-canvas"></canvas>
+    </div>
+
+    <p class="bench-footnote">
+      WASM: timing uses <code>performance.now()</code> (~0.1 ms resolution); latencies shown are
+      per-op averages across 10,000-op batches — accurate to ~10 ns per op.
+      Native C++: true nanosecond resolution via <code>std::chrono::high_resolution_clock</code>.
+      Throughput peaks at lower op counts (~1–5M) when the order-ID map fits in L3 cache;
+      at higher counts the growing book causes cache pressure and throughput decreases —
+      this reflects real-world engine behavior under sustained load.
+      <span id="bench-download-note"></span>
+    </p>
+  </section>
+
+  <script src="engine.js" onerror="window._wasmLoadFailed=true"></script>
+  <script src="benchmark.js"></script>
+</body>
+</html>
