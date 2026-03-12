@@ -30,7 +30,7 @@
   <div class="live-banner">
     <span class="live-banner-note">NOTE —</span>
     The simulation is <strong>intentionally throttled</strong> for visual clarity (adjustable via Speed).
-    The real C++ engine runs at <strong>8–13M ops/sec · p50 42–80 ns · p99 ≤300 ns</strong> on a single thread.
+    The real C++ engine runs at <strong>12–19M ops/sec · p50 47–85 ns · p99 ≤260 ns</strong> on a single thread (standard mix; up to 53M ops/sec cancel-heavy).
     Visit the <strong>BENCHMARK</strong> tab to run it yourself — or download the native server for true nanosecond timing.
     Place your own orders below to interact with the live book.
   </div>
@@ -136,14 +136,12 @@
   <!-- ── Trade ticker ────────────────────────────────────────────────────── -->
   <section class="trades-panel">
     <h2 class="panel-title">RECENT TRADES</h2>
-    <div class="trades-scroll">
-      <table class="trades-table">
-        <thead>
-          <tr><th>T</th><th>Price</th><th>Qty</th><th>Aggressor</th></tr>
-        </thead>
-        <tbody id="trades-body"></tbody>
-      </table>
-    </div>
+    <table class="trades-table">
+      <thead>
+        <tr><th>T</th><th>Price</th><th>Qty</th><th>Aggressor</th></tr>
+      </thead>
+      <tbody id="trades-body"></tbody>
+    </table>
   </section>
 
   <script src="engine.js" onerror="window._wasmLoadFailed=true"></script>

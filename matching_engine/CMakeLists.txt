@@ -9,7 +9,21 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_compile_options(-Wall -Wextra -O2)
+add_compile_options(-Wall -Wextra)
+# B2: -O2 removed — was overriding Debug builds. Release gets it via CMAKE_CXX_FLAGS_RELEASE.
+
+# B8: verify std::format is available before any target uses shared_state.hpp.
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles("
+  #include <format>
+  int main() { return std::format(\"{}\", 0).size() > 0 ? 0 : 1; }
+" HAS_STD_FORMAT)
+if(NOT HAS_STD_FORMAT)
+  message(FATAL_ERROR
+    "std::format is not available. "
+    "Requires GCC >= 13 or Clang >= 14 with -std=c++20. "
+    "Upgrade your compiler or use an alternative formatting library.")
+endif()
 
 # ── Optimized engine (intrusive list + object pool) ───────────────────────────
 add_library(engine_lib
@@ -30,19 +44,11 @@ target_link_libraries(order_book_tests PRIVATE engine_lib)
 
 # ── Benchmarks ────────────────────────────────────────────────────────────────
 
-# Original quick benchmark (kept for reference)
-add_executable(benchmark bench/benchmark.cpp)
-target_link_libraries(benchmark PRIVATE engine_lib)
-
-# Standalone baseline (for profiling in isolation)
-add_executable(baseline_engine bench/baseline_engine.cpp)
-target_include_directories(baseline_engine PRIVATE bench)
-target_link_libraries(baseline_engine PRIVATE baseline_lib)
-
-# Standalone optimized (for profiling in isolation)
-add_executable(optimized_engine bench/optimized_engine.cpp)
-target_include_directories(optimized_engine PRIVATE bench)
-target_link_libraries(optimized_engine PRIVATE engine_lib)
+# B4: merged standalone profiling binary replacing baseline_engine + optimized_engine.
+# Usage: ./standalone_bench [--engine baseline|optimized] [total_events]
+add_executable(standalone_bench bench/standalone_bench.cpp)
+target_include_directories(standalone_bench PRIVATE bench)
+target_link_libraries(standalone_bench PRIVATE engine_lib baseline_lib)
 
 # Comparison runner: runs both engines on the same workload, writes CSV
 add_executable(benchmark_runner bench/benchmark_runner.cpp)
@@ -65,3 +71,8 @@ FetchContent_MakeAvailable(httplib)
 add_executable(engine_server src/server.cpp)
 target_link_libraries(engine_server PRIVATE engine_lib httplib::httplib)
 target_include_directories(engine_server PRIVATE src)
+
+# B12: WinSock required by cpp-httplib on Windows.
+if(WIN32)
+  target_link_libraries(engine_server PRIVATE ws2_32)
+endif()

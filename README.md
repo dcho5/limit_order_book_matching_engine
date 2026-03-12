@@ -1,10 +1,10 @@
 # Limit Order Book Matching Engine
 
-A high-performance C++20 limit order book and matching engine built to demonstrate
-systems design, data-structure trade-offs, and performance engineering — topics
-commonly explored in FAANG and quant finance technical interviews.
+A high-performance C++20 limit order book and matching engine
 
-No external dependencies. Pure STL + C++20.
+Core engine: no external dependencies. Pure STL + C++20.
+`engine_server` binary: requires [cpp-httplib](https://github.com/yhirose/cpp-httplib) v0.18.1,
+fetched automatically via CMake FetchContent — no manual install needed.
 
 ---
 
@@ -152,7 +152,7 @@ requires knowing the price range upfront and handling range expansions.
 `std::map` is chosen here because:
 - Handles arbitrary price ranges without pre-allocation
 - O(log P) is negligible when P is small (typical books have <1000 active levels)
-- Code is clean and interview-discussable
+- Code is readable and self-contained
 
 A production HFT engine would use a `std::array<PriceLevel, MAX_LEVELS>` with
 a fixed tick size, gaining O(1) level access.
@@ -258,8 +258,7 @@ allocator stalls that inflate p99 and p999.
 ## Interactive Visualization
 
 The engine exports a structured event log that replays live in a browser —
-useful for demonstrating the system to recruiters, hiring managers, and
-interviewers without needing a server or any setup beyond opening a file.
+no server or setup required beyond opening a file.
 
 ### What it shows
 
@@ -336,6 +335,36 @@ without installing anything.
 
 ---
 
+## HTTP Server
+
+`engine_server` is the primary way to use the live benchmark UI with native C++ timing.
+
+```bash
+# Build and launch
+cmake -S matching_engine -B matching_engine/build && cmake --build matching_engine/build
+./matching_engine/build/engine_server
+# → listening on http://127.0.0.1:8765 (default)
+
+# Override port or bind address via environment variables
+LOBE_PORT=9000 LOBE_BIND=0.0.0.0 ./matching_engine/build/engine_server
+```
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/health` | `{"ok":true,"mode":"native"}` — used by the UI to detect native mode |
+| `POST` | `/submit_limit` | Submit a limit order. Body: `{"side":0,"price":101,"qty":50}` |
+| `POST` | `/submit_market` | Submit a market order. Body: `{"side":1,"qty":10}` |
+| `POST` | `/cancel` | Cancel by ID. Body: `{"id":42}` |
+| `POST` | `/tick` | Advance the simulation by one tick (1–5 random orders) |
+| `POST` | `/benchmark` | Run a full throughput benchmark. Body: `{"ops":1000000,"lp":60,"cp":30,"mp":10}` |
+| `POST` | `/reset` | Reset engine and book state |
+
+All responses are JSON and include CORS headers for browser access.
+
+---
+
 ## Build & Run
 
 ```bash
@@ -348,15 +377,11 @@ cmake -S matching_engine -B matching_engine/build && cmake --build matching_engi
 # Generate visualization event log → docs/data/events.json
 ./matching_engine/build/export_events
 
-# Quick throughput benchmark
-./matching_engine/build/benchmark
-
 # Comparison runner: baseline vs optimized, writes matching_engine/bench/results/
 ./matching_engine/build/benchmark_runner
 
-# Standalone profiling targets
-./matching_engine/build/baseline_engine  [total_events]
-./matching_engine/build/optimized_engine [total_events]
+# Standalone profiling (merged binary replacing baseline_engine + optimized_engine)
+./matching_engine/build/standalone_bench [--engine baseline|optimized] [total_events]
 
 # Bursty workload
 ./matching_engine/build/benchmark_runner 1000000 bursty
@@ -382,10 +407,8 @@ matching_engine/
     workload_generator.hpp  Deterministic workload: clustered prices, cancels
     latency_stats.hpp       p50/p99/p999 computation + CSV output
     benchmark_runner.cpp    Comparison runner (both engines, same workload)
-    baseline_engine.cpp     Standalone baseline binary (for profiling)
-    optimized_engine.cpp    Standalone optimized binary (for profiling)
+    standalone_bench.cpp    Profiling binary: --engine baseline|optimized
     export_events.cpp       Generates docs/data/events.json for the visualizer
-    benchmark.cpp           Quick throughput benchmark
 
   tests/
     order_book_tests.cpp    7 unit tests (no framework)

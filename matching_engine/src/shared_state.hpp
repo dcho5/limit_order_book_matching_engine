@@ -14,7 +14,13 @@
 #include <format>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
+
+// ── Ring-buffer capacity constants (item 34) ──────────────────────────────────
+
+static constexpr int TRADE_RING_CAP      = 20;
+static constexpr int TRADE_RESPONSE_MAX  = 10;
 
 // ── Shared state ──────────────────────────────────────────────────────────────
 
@@ -32,10 +38,10 @@ struct SharedState {
     uint64_t total_trades = 0;
     uint64_t sim_time     = 0;
 
-    Trade trades[20]{};
+    Trade trades[TRADE_RING_CAP]{};   // item 34: named constant
     int   trade_count = 0;
 
-    std::vector<int> live_ids;
+    std::unordered_set<int> live_ids;  // item 25: O(1) insert/erase
     int tick_mid = 100;
 
     uint64_t rng = 0xC0FFEE42ULL;
@@ -43,10 +49,13 @@ struct SharedState {
 
 // ── State helpers ─────────────────────────────────────────────────────────────
 
-inline uint64_t next_rand(SharedState& st) {
-    st.rng = st.rng * 6364136223846793005ULL + 1442695040888963407ULL;
-    return st.rng;
+// item 30: single canonical LCG step; all RNG sites use this.
+inline uint64_t lcg_step(uint64_t& rng) {
+    rng = rng * 6364136223846793005ULL + 1442695040888963407ULL;
+    return rng;
 }
+
+inline uint64_t next_rand(SharedState& st) { return lcg_step(st.rng); }
 
 inline uint64_t count_resting(SharedState& st) {
     uint64_t n = 0;
@@ -67,14 +76,14 @@ inline double compute_mid(SharedState& st) {
 inline void add_trade(SharedState& st, uint64_t price, uint64_t qty, bool buy_aggressor) {
     ++st.total_trades;
     ++st.sim_time;
-    if (st.trade_count < 20) ++st.trade_count;
+    if (st.trade_count < TRADE_RING_CAP) ++st.trade_count;  // item 34
     for (int i = st.trade_count - 1; i > 0; --i) st.trades[i] = st.trades[i-1];
     st.trades[0] = { st.sim_time, price, qty, buy_aggressor };
 }
 
+// item 25: O(1) erase by value (unordered_set).
 inline void remove_live(SharedState& st, int id) {
-    auto it = std::find(st.live_ids.begin(), st.live_ids.end(), id);
-    if (it != st.live_ids.end()) st.live_ids.erase(it);
+    st.live_ids.erase(id);
 }
 
 // ── JSON response builder ─────────────────────────────────────────────────────
@@ -115,7 +124,7 @@ inline std::string build_response(SharedState& st, int order_id, uint64_t elapse
     s += ']';
 
     s += ",\"trades\":[";
-    int maxT = std::min(st.trade_count, 10);
+    int maxT = std::min(st.trade_count, TRADE_RESPONSE_MAX);  // item 34
     for (int i = 0; i < maxT; ++i) {
         if (i) s += ',';
         s += std::format("{{\"t\":{},\"price\":{},\"qty\":{},\"side\":\"{}\"}}",
@@ -132,6 +141,16 @@ inline std::string build_response(SharedState& st, int order_id, uint64_t elapse
     return s;
 }
 
+// ── Book seed helper (item 29) ────────────────────────────────────────────────
+
+// Seeds 8 bid/ask levels around price 100. Extracted from 3 copy-paste sites.
+inline void init_engine_and_book(MatchingEngine& eng, std::vector<Fill>& fills) {
+    for (int d = 1; d <= 8; ++d) {
+        fills.clear(); eng.submit_limit(Side::Buy,  100 - d, 200, fills);
+        fills.clear(); eng.submit_limit(Side::Sell, 100 + d, 200, fills);
+    }
+}
+
 // ── Engine initialiser ────────────────────────────────────────────────────────
 
 inline void init_engine(SharedState& st) {
@@ -144,9 +163,6 @@ inline void init_engine(SharedState& st) {
     st.trade_count  = 0;
     st.tick_mid     = 100;
 
-    for (int d = 1; d <= 8; ++d) {
-        st.fills.clear(); st.eng->submit_limit(Side::Buy,  100 - d, 200, st.fills);
-        st.fills.clear(); st.eng->submit_limit(Side::Sell, 100 + d, 200, st.fills);
-    }
-    for (int i = 1; i <= 16; ++i) st.live_ids.push_back(i);
+    init_engine_and_book(*st.eng, st.fills);         // item 29
+    for (int i = 1; i <= 16; ++i) st.live_ids.insert(i);  // item 25
 }

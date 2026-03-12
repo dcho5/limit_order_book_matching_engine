@@ -18,3 +18,13 @@ results/
 
 # Claude Code
 .claude/
+
+# CMake artifacts (B7)
+*.o
+*.a
+*.so
+*.dylib
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json

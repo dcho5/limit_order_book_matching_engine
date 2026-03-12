@@ -2,7 +2,6 @@
 #include "order.hpp"
 #include "price_level.hpp"
 #include <cstdint>
-#include <functional>
 #include <map>
 #include <unordered_map>
 

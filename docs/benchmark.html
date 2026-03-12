@@ -42,8 +42,8 @@
         <ol>
           <li>
             <strong>Download</strong> the binary for your OS from
-            <a href="https://github.com/dcho-jaewook/limit-order-book-matching-engine/releases/latest"
-               style="color:var(--yellow)">GitHub Releases</a>:<br>
+            <a href="https://github.com/dcho5/limit_order_book_matching_engine/releases"
+               class="text-yellow">GitHub Releases</a>:<br>
             <code>engine_server-mac-arm64</code> &nbsp;·&nbsp;
             <code>engine_server-mac-x86_64</code> &nbsp;·&nbsp;
             <code>engine_server-linux-x86_64</code> &nbsp;·&nbsp;
@@ -56,11 +56,11 @@
           </li>
           <li>
             <strong>Reload this page.</strong> The mode badge will switch to
-            <span style="color:var(--green)">● NATIVE C++</span> automatically.
+            <span class="text-green">● NATIVE C++</span> automatically.
           </li>
         </ol>
         <p class="native-instructions-note">
-          <strong>What to expect:</strong> 8–13M ops/sec · p50 42–80 ns · p99 ≤300 ns ·
+          <strong>What to expect:</strong> 12–19M ops/sec (standard mix) · up to 53M ops/sec cancel-heavy · p50 47–85 ns · p99 ≤260 ns ·
           true nanosecond resolution via <code>std::chrono::high_resolution_clock</code>.
           The server runs locally — no data leaves your machine.<br>
           <strong>Safari on GitHub Pages:</strong> Safari blocks localhost connections from HTTPS pages.
@@ -70,33 +70,78 @@
     </details>
 
     <div class="bench-controls">
-      <div class="bench-input-group">
-        <label class="field-label" for="bench-ops">Operations</label>
-        <input id="bench-ops" type="number" min="10000" max="35000000"
-               step="1000" value="100000" class="bench-input">
-        <span class="bench-input-hint">10K – 35M</span>
+
+      <!-- Scenario presets -->
+      <div class="bench-control-section">
+        <span class="bench-section-label">SCENARIO PRESETS</span>
+        <div class="bench-pills" id="bench-scenario-pills">
+          <button class="bench-pill" data-ops="100000"   data-lp="60" data-cp="30" data-mp="10">Quick · 100K</button>
+          <button class="bench-pill bench-pill-active"   data-ops="1000000"  data-lp="60" data-cp="30" data-mp="10">Standard · 1M</button>
+          <button class="bench-pill" data-ops="5000000"  data-lp="60" data-cp="30" data-mp="10">Stress · 5M</button>
+          <button class="bench-pill" data-ops="10000000" data-lp="60" data-cp="30" data-mp="10">Max Load · 10M</button>
+          <button class="bench-pill" data-ops="5000000"  data-lp="30" data-cp="60" data-mp="10">Cancel Storm</button>
+          <button class="bench-pill" data-ops="1000000"  data-lp="30" data-cp="20" data-mp="50">Market Impact</button>
+          <button class="bench-pill" data-ops="2000000"  data-lp="80" data-cp="10" data-mp="10">Limit Heavy</button>
+        </div>
       </div>
-      <div class="bench-input-group">
-        <label class="field-label" for="bench-limit-pct">Limit %</label>
-        <input id="bench-limit-pct" type="number" min="0" max="100"
-               step="1" value="60" class="bench-input bench-input-sm">
+
+      <!-- Operations slider -->
+      <div class="bench-control-section">
+        <div class="bench-label-row">
+          <span class="bench-section-label">OPERATIONS</span>
+          <span id="bench-ops-display" class="bench-ops-count">1,000,000</span>
+        </div>
+        <input id="bench-ops" type="range" min="10000" max="10000000" step="10000" value="1000000" class="bench-slider">
+        <div class="bench-pills bench-ops-pills">
+          <button class="bench-ops-pill" data-val="100000">100K</button>
+          <button class="bench-ops-pill" data-val="500000">500K</button>
+          <button class="bench-ops-pill bench-pill-active" data-val="1000000">1M</button>
+          <button class="bench-ops-pill" data-val="5000000">5M</button>
+          <button class="bench-ops-pill" data-val="10000000">10M</button>
+        </div>
+        <p class="bench-ops-note">
+          Min 10K: fewer ops give noisy per-op averages.
+          Max 10M (WASM) / 35M (native): beyond this the order-ID map outgrows L3 cache —
+          throughput drops and the tab may freeze in WASM mode.
+        </p>
       </div>
-      <div class="bench-input-group">
-        <label class="field-label" for="bench-cancel-pct">Cancel %</label>
-        <input id="bench-cancel-pct" type="number" min="0" max="100"
-               step="1" value="30" class="bench-input bench-input-sm">
+
+      <!-- Operation mix -->
+      <div class="bench-control-section">
+        <span class="bench-section-label">OPERATION MIX</span>
+        <div class="bench-mix-bar">
+          <div id="bench-mix-lseg" class="bench-mix-seg bench-seg-limit"  style="width:60%"><span class="bench-mix-seg-txt">LIMIT 60%</span></div>
+          <div id="bench-mix-cseg" class="bench-mix-seg bench-seg-cancel" style="width:30%"><span class="bench-mix-seg-txt">CANCEL 30%</span></div>
+          <div id="bench-mix-mseg" class="bench-mix-seg bench-seg-market" style="width:10%"><span class="bench-mix-seg-txt"></span></div>
+        </div>
+        <div class="bench-mix-sliders">
+          <div class="bench-mix-row">
+            <span class="bench-mix-lbl bench-lbl-limit">LIMIT</span>
+            <input id="bench-limit-pct" type="range" min="0" max="100" step="5" value="60" class="bench-slider bench-slider-limit">
+            <span id="bench-lval" class="bench-mix-val">60%</span>
+          </div>
+          <div class="bench-mix-row">
+            <span class="bench-mix-lbl bench-lbl-cancel">CANCEL</span>
+            <input id="bench-cancel-pct" type="range" min="0" max="100" step="5" value="30" class="bench-slider bench-slider-cancel">
+            <span id="bench-cval" class="bench-mix-val">30%</span>
+          </div>
+          <div class="bench-mix-row">
+            <span class="bench-mix-lbl bench-lbl-market">MARKET</span>
+            <div class="bench-mix-auto-track">
+              <div id="bench-mix-mbar" class="bench-mix-auto-fill" style="width:10%"></div>
+            </div>
+            <span id="bench-mval" class="bench-mix-val bench-mix-val-auto">10%</span>
+          </div>
+        </div>
+        <input id="bench-market-pct" type="hidden" value="10">
       </div>
-      <div class="bench-input-group">
-        <label class="field-label" for="bench-market-pct">Market %</label>
-        <input id="bench-market-pct" type="number" min="0" max="100"
-               step="1" value="10" class="bench-input bench-input-sm">
-      </div>
-      <div class="bench-input-group bench-btn-group">
-        <button id="bench-run-btn" class="btn btn-primary bench-run-btn">
-          RUN BENCHMARK
-        </button>
+
+      <!-- Run -->
+      <div class="bench-run-row">
+        <button id="bench-run-btn" class="btn btn-primary bench-run-btn">RUN BENCHMARK</button>
         <span id="bench-error" class="bench-error" style="display:none"></span>
       </div>
+
     </div>
 
     <div id="bench-results" class="bench-results" style="display:none">

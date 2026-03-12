@@ -524,14 +524,11 @@ header h1 {
 }
 
 /* 10 rows × ~22px = 220px. Fixed so panel height is stable. */
-.trades-scroll {
-  height: 220px;
-  overflow: hidden;
-}
-
 .trades-table {
   width: 100%;
   border-collapse: collapse;
+  height: 220px;
+  overflow: hidden;
   font-size: 12px;
   table-layout: fixed;
 }
@@ -632,45 +629,156 @@ header h1 {
 
 .bench-controls {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-
-.bench-input-group {
-  display: flex;
   flex-direction: column;
-  gap: 4px;
-  position: relative;
+  gap: 20px;
+  margin-bottom: 20px;
 }
 
-.bench-input {
-  padding: 5px 8px;
-  font-family: var(--font);
-  font-size: 12px;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  outline: none;
-  height: 28px;
-  width: 110px;
-}
-.bench-input-sm { width: 72px; }
-.bench-input:focus { border-color: var(--yellow); }
+/* Control sections */
+.bench-control-section { display: flex; flex-direction: column; gap: 8px; }
 
-.bench-input-hint {
+.bench-section-label {
   font-size: 9px;
+  letter-spacing: 2px;
   color: var(--text-dim);
-  letter-spacing: 0.5px;
-  position: absolute;
-  bottom: -14px;
-  left: 0;
-  white-space: nowrap;
+  display: block;
 }
 
-.bench-btn-group { justify-content: flex-end; gap: 6px; }
+.bench-label-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.bench-ops-count {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--yellow);
+  font-family: var(--font);
+}
+
+/* Pill buttons */
+.bench-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.bench-pill, .bench-ops-pill {
+  padding: 3px 11px;
+  font-family: var(--font);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  background: var(--bg);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.bench-pill:hover, .bench-ops-pill:hover {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+.bench-pill-active {
+  background: var(--yellow);
+  color: #0a1628;
+  border-color: var(--yellow);
+  font-weight: bold;
+}
+
+/* Range sliders */
+.bench-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.bench-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--yellow);
+  cursor: pointer;
+  border: none;
+}
+.bench-slider::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--yellow);
+  border: none;
+  cursor: pointer;
+}
+.bench-slider-limit::-webkit-slider-thumb  { background: var(--green); }
+.bench-slider-limit::-moz-range-thumb      { background: var(--green); }
+.bench-slider-cancel::-webkit-slider-thumb { background: var(--yellow); }
+.bench-slider-cancel::-moz-range-thumb     { background: var(--yellow); }
+
+/* Ops pills row */
+.bench-ops-pills { margin-top: 4px; }
+
+/* Mix stacked bar */
+.bench-mix-bar {
+  display: flex;
+  height: 22px;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.bench-mix-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 0.18s ease;
+  overflow: hidden;
+  min-width: 0;
+}
+.bench-mix-seg-txt {
+  font-size: 9px;
+  letter-spacing: 0.4px;
+  font-weight: bold;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+.bench-seg-limit  { background: #142b1e; color: var(--green); }
+.bench-seg-cancel { background: #302800; color: var(--yellow); }
+.bench-seg-market { background: #2a1019; color: var(--red); }
+
+/* Mix sliders */
+.bench-mix-sliders { display: flex; flex-direction: column; gap: 7px; }
+.bench-mix-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+}
+.bench-mix-lbl {
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-weight: bold;
+}
+.bench-lbl-limit  { color: var(--green); }
+.bench-lbl-cancel { color: var(--yellow); }
+.bench-lbl-market { color: var(--red); }
+.bench-mix-val { font-size: 11px; font-family: var(--font); color: var(--text); text-align: right; }
+.bench-mix-val-auto { color: var(--text-dim); }
+
+/* Market auto-track (read-only visual) */
+.bench-mix-auto-track {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.bench-mix-auto-fill {
+  height: 100%;
+  background: var(--red);
+  border-radius: 2px;
+  opacity: 0.6;
+  transition: width 0.18s ease;
+}
+
+/* Run row */
+.bench-run-row { display: flex; align-items: center; gap: 12px; }
 .bench-run-btn { height: 28px; padding: 0 18px; letter-spacing: 1px; font-size: 11px; }
 
 .bench-error {
@@ -718,6 +826,7 @@ header h1 {
   margin-top: 2px;
 }
 
+.bench-ops-note { font-size: 9px; color: var(--text-dim); opacity: 0.6; line-height: 1.6; margin-top: 2px; }
 .bench-footnote { font-size: 10px; color: var(--text-dim); line-height: 1.7; opacity: 0.7; }
 .bench-footnote code { color: var(--yellow); font-size: 10px; }
 
@@ -725,11 +834,15 @@ header h1 {
 .native-instructions-toggle { padding: 8px 14px; cursor: pointer; font-size: .75rem;
   letter-spacing: .08em; color: var(--yellow); list-style: none; }
 .native-instructions-toggle::marker, .native-instructions-toggle::-webkit-details-marker { display:none; }
-details[open] .native-instructions-toggle { color: var(--fg); }
+details[open] .native-instructions-toggle { color: var(--text); }
 .native-instructions-body { padding: 10px 18px 14px; border-top: 1px solid #1e2d45; }
 .native-instructions-body ol { margin: 0 0 10px; padding-left: 20px; line-height: 1.7; }
 .native-instructions-body code { color: var(--yellow); }
 .native-instructions-note { margin: 0; font-size: .75rem; color: var(--dim); line-height: 1.6; }
+
+/* F24 — utility colour classes replacing inline style="color:var(--...)" */
+.text-yellow { color: var(--yellow); }
+.text-green  { color: var(--green);  }
 
 @media (max-width: 720px) {
   .bench-stat { min-width: 80px; padding: 8px 12px; }

@@ -79,7 +79,7 @@ async function callEngine(wasmFn, wasmArgs, nativePath, nativeBody) {
 
 // ── Book state (populated from C++ JSON) ──────────────────────────────────────
 
-let simTime     = 0;
+// F14: removed simTime (was set but never read)
 let totalOrders = 0;
 let totalTrades = 0;
 let bookResting = 0;   // from stats.resting in C++ response
@@ -98,37 +98,35 @@ let bestAskPrice = null;
 function bestBid() { return bestBidPrice; }
 function bestAsk() { return bestAskPrice; }
 
-// ── Apply C++ JSON response to local state ────────────────────────────────────
+// ── Apply C++ JSON response to local state (item F22: split into 4 helpers) ───
 
-function applyBookState(data) {
-  if (!data) return;
-
-  // Rebuild bids/asks maps
+function applyOrderBookState(data) {
   bids.clear();
   asks.clear();
   for (const b of (data.bids || [])) bids.set(b.price, { orders: [], vol: b.vol });
   for (const a of (data.asks || [])) asks.set(a.price, { orders: [], vol: a.vol });
-
-  // Best prices
   bestBidPrice = data.bids && data.bids.length > 0 ? data.bids[0].price : null;
   bestAskPrice = data.asks && data.asks.length > 0 ? data.asks[0].price : null;
+}
 
-  // Stats
+function applyStatsState(data) {
   if (data.stats) {
     totalOrders = data.stats.totalOrders;
     totalTrades = data.stats.totalTrades;
     bookResting = data.stats.resting;
     if (data.stats.mid) midPrice = data.stats.mid;
   }
+}
 
-  // Trades
+function applyTradesState(data) {
   trades.length = 0;
   for (const t of (data.trades || [])) {
     trades.push({ t: t.t, price: t.price, qty: t.qty,
                   aggressor: t.side === 'buy' ? 'BUY' : 'SELL' });
   }
-  simTime = trades.length > 0 ? trades[0].t : simTime;
+}
 
+function applyFillsState(data) {
   // Process fills → update user order status.
   // In WASM mode, only process fills from the current engine session; restored
   // orders from a previous session cannot receive fills from a fresh engine, and
@@ -156,6 +154,14 @@ function applyBookState(data) {
   }
 }
 
+function applyBookState(data) {
+  if (!data) return;
+  applyOrderBookState(data);
+  applyStatsState(data);
+  applyTradesState(data);
+  applyFillsState(data);
+}
+
 // ── Price history ──────────────────────────────────────────────────────────────
 
 const priceHistory = [];
@@ -164,7 +170,9 @@ const MAX_HISTORY  = 300;
 function recordMid() {
   if (bestBidPrice === null || bestAskPrice === null) return;
   const mid = (bestBidPrice + bestAskPrice) / 2;
-  priceHistory.push({ t: simTime, mid });
+  // F14: simTime removed; use trades[0].t if available, else priceHistory length
+  const t = trades.length > 0 ? trades[0].t : priceHistory.length;
+  priceHistory.push({ t, mid });
   if (priceHistory.length > MAX_HISTORY) priceHistory.shift();
 }
 
@@ -284,7 +292,10 @@ function renderOrderBook() {
     ...topAsks.filter(Boolean).map(([, v]) => v), 1
   );
 
-  document.getElementById('bids-rows').innerHTML = topBids.map(entry => {
+  // F19: null guard
+  const bidsRows = document.getElementById('bids-rows');
+  if (!bidsRows) return;
+  bidsRows.innerHTML = topBids.map(entry => {
     if (!entry) return `<div class="level-row level-empty">
       <span class="lv-vol">—</span><div class="bar-wrap"></div><span class="lv-price">—</span>
     </div>`;
@@ -372,6 +383,8 @@ function renderStats() {
 
 function renderUserOrders() {
   const panel = document.getElementById('user-orders-panel');
+  // F19: null guard
+  if (!panel) return;
   const list  = document.getElementById('user-orders-list');
 
   if (userOrders.length === 0) { panel.style.display = 'none'; return; }
@@ -451,10 +464,21 @@ document.getElementById('user-orders-list').addEventListener('mousedown', e => {
 
 // ── Price chart (canvas) ───────────────────────────────────────────────────────
 
+// F20: named canvas colour constants
+const CHART = {
+  UP:   '#00d26a',
+  DOWN: '#ff4757',
+  GRID: '#1e2d45',
+  BAR:  '#ffd32a99',
+  LABEL:'#5a6a80'
+};
+
 const CHART_H = 140;
 
 function resizeChart() {
   const canvas = document.getElementById('price-chart');
+  // F19: null guard
+  if (!canvas) return;
   const wrap   = canvas.parentElement;
   const dpr    = window.devicePixelRatio || 1;
   const logW   = wrap.clientWidth;
@@ -467,6 +491,8 @@ function resizeChart() {
 
 function renderPriceChart() {
   const canvas = document.getElementById('price-chart');
+  // F19: null guard
+  if (!canvas) return;
   const ctx    = canvas.getContext('2d');
   const dpr    = window.devicePixelRatio || 1;
   const W      = canvas.width  / dpr;
@@ -501,10 +527,10 @@ function renderPriceChart() {
   const yOf = p => PAD_T + (1 - (p - lo) / (hi - lo)) * cH;
 
   const rising    = mids[n - 1] >= mids[0];
-  const lineColor = rising ? '#00d26a' : '#ff4757';
+  const lineColor = rising ? CHART.UP : CHART.DOWN;  // F20
 
-  ctx.strokeStyle = '#1e2d45'; ctx.lineWidth = 1;
-  ctx.font = '10px Courier New, monospace'; ctx.fillStyle = '#5a6a80'; ctx.textAlign = 'left';
+  ctx.strokeStyle = CHART.GRID; ctx.lineWidth = 1;  // F20
+  ctx.font = '10px Courier New, monospace'; ctx.fillStyle = CHART.LABEL; ctx.textAlign = 'left';  // F20
   for (let g = 0; g <= 4; g++) {
     const y = PAD_T + (g / 4) * cH;
     ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(PAD_L + cW, y); ctx.stroke();
