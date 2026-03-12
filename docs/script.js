@@ -175,7 +175,7 @@ const userOrderMap    = new Map();  // restingId → entry
 const currentSessionIds = new Set(); // WASM: restingIds placed in the current engine session
 let   userOrderSeq    = 0;
 
-function addUserOrder(restingId, side, type, price, origQty, filledQty, restingQty, elapsed_ns, avgFillPrice) {
+function addUserOrder(restingId, side, type, price, origQty, filledQty, restingQty, elapsed_ns, avgFillPrice, midAtSubmission) {
   let status;
   if (type === 'market') {
     status = filledQty >= origQty ? 'FILLED' : filledQty > 0 ? 'PARTIAL' : 'REJECTED';
@@ -186,10 +186,11 @@ function addUserOrder(restingId, side, type, price, origQty, filledQty, restingQ
   const uo = {
     localId: userOrderSeq++, restingId, side, type, price, origQty,
     filledQty, status, elapsed_ns: elapsed_ns || 0,
-    avgFillPrice: avgFillPrice || 0
+    avgFillPrice: avgFillPrice || 0,
+    midAtSubmission: midAtSubmission || 0
   };
   userOrders.push(uo);
-  if (userOrders.length > 20) userOrders.shift();
+  if (userOrders.length > 50) userOrders.shift();
   if (restingId !== null) {
     userOrderMap.set(restingId, uo);
     if (!useNative) currentSessionIds.add(restingId);
@@ -397,13 +398,21 @@ function renderUserOrders() {
           : `${Math.round(uo.elapsed_ns / 1000)}µs`)
       : '—';
 
-    // Slippage: avg fill price vs limit price (for limit orders with fills)
+    // Slippage: avg fill price vs limit price (limit orders) or mid at submission (market orders)
     let slippageTxt = '—';
+    let slippageCls = '';
     if (uo.type === 'limit' && uo.avgFillPrice > 0 && uo.filledQty > 0) {
       const slip = uo.side === 'buy'
         ? uo.price - uo.avgFillPrice    // positive = favorable (paid less)
         : uo.avgFillPrice - uo.price;   // positive = favorable (received more)
-      slippageTxt = slip === 0 ? '0' : (slip > 0 ? `+${slip.toFixed(0)}` : slip.toFixed(0));
+      slippageTxt = slip === 0 ? '0' : (slip > 0 ? `+${slip.toFixed(1)}` : slip.toFixed(1));
+      slippageCls = slip >= 0 ? 'slip-pos' : 'slip-neg';
+    } else if (uo.type === 'market' && uo.avgFillPrice > 0 && uo.midAtSubmission > 0) {
+      const slip = uo.side === 'buy'
+        ? uo.midAtSubmission - uo.avgFillPrice
+        : uo.avgFillPrice - uo.midAtSubmission;
+      slippageTxt = slip === 0 ? '0' : (slip > 0 ? `+${slip.toFixed(1)}` : slip.toFixed(1));
+      slippageCls = slip >= 0 ? 'slip-pos' : 'slip-neg';
     }
 
     rows.push(`<div class="uo-row">
@@ -417,7 +426,7 @@ function renderUserOrders() {
       </div>
       <span class="uo-fill-count">${uo.filledQty}/${uo.origQty}</span>
       <span class="uo-fill-time">${fillTime}</span>
-      <span class="uo-slippage">${slippageTxt}</span>
+      <span class="uo-slippage ${slippageCls}">${slippageTxt}</span>
       <span class="uo-status ${statusCls}">● ${uo.status}</span>
       ${cancelBtn}
     </div>`);
@@ -568,6 +577,7 @@ document.getElementById('user-order-form').addEventListener('submit', async e =>
   if (isNaN(qty) || qty <= 0) { _setFormError('Quantity must be a positive integer.'); return; }
   if (type === 'limit' && (isNaN(price) || price <= 0)) { _setFormError('Limit price must be a positive integer.'); return; }
 
+  const midAtSubmission = midPrice;
   let data;
   if (type === 'market') {
     data = await submitMarket(side, qty);
@@ -594,7 +604,7 @@ document.getElementById('user-order-form').addEventListener('submit', async e =>
   }
 
   addUserOrder(restingId, side, type, type === 'market' ? null : price,
-               qty, filledQty, restingQty, elapsed, avgFill);
+               qty, filledQty, restingQty, elapsed, avgFill, midAtSubmission);
 
   recordMid();
   render();

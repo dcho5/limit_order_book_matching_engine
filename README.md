@@ -314,10 +314,10 @@ engine's internal state changes.
 ```bash
 # 1. Build and generate the event log
 cmake -S matching_engine -B matching_engine/build && cmake --build matching_engine/build
-./matching_engine/build/export_events   # writes matching_engine/web/data/events.json
+./matching_engine/build/export_events   # writes docs/data/events.json
 
 # 2. Serve the web directory (fetch() requires HTTP, not file://)
-cd matching_engine/web && python3 -m http.server 8080
+cd docs && python3 -m http.server 8080
 
 # 3. Open in browser
 open http://localhost:8080
@@ -325,11 +325,10 @@ open http://localhost:8080
 
 ### Deploy to GitHub Pages
 
-The `matching_engine/web/` directory is self-contained static HTML — no build
-step, no server.
+The `docs/` directory is self-contained static HTML — no build step, no server.
 
 1. Push the repo to GitHub
-2. Go to **Settings → Pages → Source** and set the branch/folder to `matching_engine/web/`
+2. Go to **Settings → Pages → Source**, select branch `main`, folder `/docs`
 3. GitHub Pages serves `index.html` at `https://<user>.github.io/<repo>/`
 
 Add the URL to your resume. Anyone who clicks it sees a live order book replay
@@ -346,7 +345,7 @@ cmake -S matching_engine -B matching_engine/build && cmake --build matching_engi
 # Unit tests
 ./matching_engine/build/order_book_tests
 
-# Generate visualization event log → matching_engine/web/data/events.json
+# Generate visualization event log → docs/data/events.json
 ./matching_engine/build/export_events
 
 # Quick throughput benchmark
@@ -385,17 +384,17 @@ matching_engine/
     benchmark_runner.cpp    Comparison runner (both engines, same workload)
     baseline_engine.cpp     Standalone baseline binary (for profiling)
     optimized_engine.cpp    Standalone optimized binary (for profiling)
-    export_events.cpp       Generates web/data/events.json for the visualizer
+    export_events.cpp       Generates docs/data/events.json for the visualizer
     benchmark.cpp           Quick throughput benchmark
 
   tests/
     order_book_tests.cpp    7 unit tests (no framework)
 
-  web/
-    index.html              Browser visualizer (plain HTML, no frameworks)
-    script.js               In-browser matching engine + rendering
-    style.css               Dark trading terminal theme
-    data/events.json        Pre-generated event log (output of export_events)
+docs/
+  index.html              Browser visualizer (plain HTML, no frameworks)
+  script.js               In-browser matching engine + rendering
+  style.css               Dark trading terminal theme
+  data/events.json        Pre-generated event log (output of export_events)
 
   CMakeLists.txt
 

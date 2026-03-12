@@ -294,7 +294,17 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #1e2d45 transparent;
 }
+.user-orders-list::-webkit-scrollbar       { width: 4px; }
+.user-orders-list::-webkit-scrollbar-track { background: transparent; }
+.user-orders-list::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 2px; }
+
+.slip-pos { color: var(--green); }
+.slip-neg { color: var(--red); }
 
 .uo-row {
   display: grid;

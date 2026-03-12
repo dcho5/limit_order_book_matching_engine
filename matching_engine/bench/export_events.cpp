@@ -1,7 +1,7 @@
 // export_events.cpp
 //
-// Generates a structured event log (web/data/events.json) that the browser
-// visualizer (web/index.html) can replay interactively.
+// Generates a structured event log (docs/data/events.json) that the browser
+// visualizer (docs/index.html) can replay interactively.
 //
 // The scenario tells a complete story:
 //   Phase 1 — Build the book (both sides, 4 price levels each)
@@ -15,7 +15,7 @@
 //
 // Usage:
 //   ./export_events [output_path]
-//   Default output: web/data/events.json
+//   Default output: docs/data/events.json
 
 #include "event_logger.hpp"
 #include <cstdio>
@@ -24,7 +24,7 @@
 #include <string>
 
 int main(int argc, char** argv) {
-    const char* out = (argc > 1) ? argv[1] : "web/data/events.json";
+    const char* out = (argc > 1) ? argv[1] : "docs/data/events.json";
 
     EventLogger log;
 

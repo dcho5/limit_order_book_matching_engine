@@ -10,7 +10,7 @@
 // ── EventLogger ───────────────────────────────────────────────────────────────
 //
 // Wraps MatchingEngine and records every observable event to a JSON array
-// that can be loaded by the browser visualizer (web/index.html).
+// that can be loaded by the browser visualizer (docs/index.html).
 //
 // Event schema:
 //   {"type":"add",    "t":N, "id":N, "side":"buy"|"sell", "price":N, "qty":N}

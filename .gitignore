@@ -15,3 +15,6 @@ results/
 .idea/
 *.swp
 *.swo
+
+# Claude Code
+.claude/

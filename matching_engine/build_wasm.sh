@@ -8,8 +8,8 @@
 #   bash matching_engine/build_wasm.sh
 #
 # Outputs:
-#   matching_engine/web/engine.js   (Emscripten JS glue)
-#   matching_engine/web/engine.wasm (compiled C++ engine)
+#   docs/engine.js   (Emscripten JS glue)
+#   docs/engine.wasm (compiled C++ engine)
 #
 # Both files must be committed to the repository for GitHub Pages to serve them.
 
@@ -17,7 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-WEB_DIR="$SCRIPT_DIR/web"
+WEB_DIR="$PROJECT_ROOT/docs"
 SRC_DIR="$SCRIPT_DIR/src"
 
 echo "Building WASM engine..."

@@ -6,8 +6,8 @@
 #
 # Outputs:
 #   matching_engine/build/engine_server   (native HTTP server)
-#   matching_engine/web/engine.js         (WASM JS glue)
-#   matching_engine/web/engine.wasm       (WASM binary)
+#   docs/engine.js         (WASM JS glue)
+#   docs/engine.wasm       (WASM binary)
 
 set -euo pipefail
 
@@ -49,4 +49,4 @@ fi
 
 echo "==> Done."
 if $BUILD_NATIVE; then echo "    Native server: $BUILD_DIR/engine_server"; fi
-if $BUILD_WASM;   then echo "    WASM:          $SCRIPT_DIR/web/engine.{js,wasm}"; fi
+if $BUILD_WASM;   then echo "    WASM:          $(dirname "$SCRIPT_DIR")/docs/engine.{js,wasm}"; fi
